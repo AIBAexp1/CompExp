@@ -557,9 +557,9 @@ function detailHtml(app) {
   const isSel = selected.has(app.id);
   let sumHtml = '';
   if (CONDITION === 'naive')
-    sumHtml = `<div class="summary-card naive"><div class="summary-label">🤖 AI 표준 요약</div>${app.naive_summary}</div>`;
+    sumHtml = `<div class="summary-card naive"><div class="summary-label">🤖 AI 요약</div>${app.naive_summary}</div>`;
   else if (CONDITION === 'compassionate')
-    sumHtml = `<div class="summary-card compassionate"><div class="summary-label">🤖 AI 공감형 요약</div>${app.comp_summary}</div>`;
+    sumHtml = `<div class="summary-card compassionate"><div class="summary-label">🤖 AI 요약</div>${app.comp_summary}</div>`;
 
   return `
     <div style="position:sticky;top:0;z-index:10;background:#f4f7f6;display:flex;align-items:center;justify-content:space-between;padding:12px 0 10px;margin-bottom:4px;border-bottom:1px solid #ddd;">
