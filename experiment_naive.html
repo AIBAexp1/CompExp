@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>대출 심사 실험</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #f4f7f6; font-family: sans-serif; }
+    .jspsych-content { max-width: 1200px; text-align: left; }
+
+    /* ── 레이아웃 ── */
+    .exp-container { display: flex; height: 700px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .left-panel  { width: 28%; overflow-y: auto; border-right: 1px solid #ccc; background: #fff; padding: 10px; }
+    .right-panel { width: 72%; overflow-y: auto; background: #f4f7f6; padding: 20px; }
+    .bottom-bar  { margin-top: 12px; padding: 14px 20px; background: #fff; border: 1px solid #ccc; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+
+    /* ── 카드 ── */
+    .applicant-card { padding: 12px; margin-bottom: 8px; background: white; border: 1px solid #e0e6ed; border-radius: 8px; cursor: pointer; }
+    .applicant-card:hover  { background: #f0f4f8; }
+    .applicant-card.active { border: 2px solid #3498db; background: #ebf5fb; }
+    .applicant-card.selected-for-fund { border-color: #27ae60; background: #eafaf1; }
+    .card-row { display: flex; align-items: center; gap: 10px; }
+    .card-name { font-size: 15px; font-weight: bold; flex: 1; }
+    .rated-badge { font-size: 11px; background: #27ae60; color: white; border-radius: 10px; padding: 2px 7px; white-space: nowrap; }
+
+    /* ── 상세 내용 ── */
+    .section-title { font-size: 17px; font-weight: 700; color: #2c3e50; margin: 18px 0 10px; border-bottom: 2px solid #34495e; padding-bottom: 6px; }
+    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 10px; margin-bottom: 16px; }
+    .data-item { background: white; border: 1px solid #edf2f7; border-radius: 8px; padding: 12px; }
+    .data-label { font-size: 12px; color: #7f8c8d; margin-bottom: 4px; }
+    .data-value { font-size: 15px; font-weight: 600; color: #34495e; }
+    .debt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .debt-card { background: white; border: 1px solid #e0e6ed; border-radius: 8px; padding: 14px; }
+    .debt-card h4 { margin: 0 0 10px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 6px; color: #34495e; }
+    .debt-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+    .debt-reason { margin-top: 8px; font-size: 12px; color: #555; border-top: 1px dashed #eee; padding-top: 6px; }
+    .text-box { background: white; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; font-size: 14px; line-height: 1.7; }
+    .text-box-title { font-weight: 700; font-size: 13px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 6px; }
+    .val-red { color: #e74c3c; } .val-blue { color: #2980b9; } .val-green { color: #27ae60; }
+
+    /* ── AI 요약 ── */
+    .summary-card { border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.75; }
+    .summary-card.naive         { background: #fafafa; border-left: 4px solid #95a5a6; }
+    .summary-card.compassionate { background: #eaf4fc; border-left: 4px solid #2980b9; }
+    .summary-label { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #555; }
+
+    /* ── 평가 섹션 (Likert) ── */
+    .rating-section { background: white; border: 2px solid #2980b9; border-radius: 8px; padding: 18px 22px; margin-top: 12px; }
+    .rating-title   { font-size: 15px; font-weight: 700; color: #1a5276; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #d6eaf8; }
+    .rating-item    { margin-bottom: 16px; }
+    .rating-q       { font-size: 13px; font-weight: 600; color: #2c3e50; margin-bottom: 4px; }
+    .rating-sub     { font-size: 12px; color: #999; margin-bottom: 8px; }
+    .likert-row     { display: flex; align-items: center; gap: 6px; }
+    .likert-anchor  { font-size: 11px; color: #aaa; min-width: 70px; line-height: 1.3; }
+    .likert-anchor.right { text-align: right; }
+    .likert-btns    { display: flex; gap: 5px; flex: 1; justify-content: center; }
+    .lbtn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #d5d8dc; background: white; font-size: 13px; font-weight: 700; color: #888; cursor: pointer; transition: all 0.12s; }
+    .lbtn:hover   { border-color: #2980b9; color: #2980b9; }
+    .lbtn.selected { border-color: #2980b9; background: #2980b9; color: white; }
+    .rating-done { display: none; text-align: center; margin-top: 10px; padding: 8px; background: #eafaf1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #1e8449; }
+
+    /* ── 선택 버튼 ── */
+    .fund-btn { padding: 8px 18px; border-radius: 20px; border: 2px solid #27ae60; background: white; color: #27ae60; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .fund-btn:hover   { background: #27ae60; color: white; }
+    .fund-btn.selected { background: #27ae60; color: white; }
+    .fund-btn.selected:hover { background: #e74c3c; border-color: #e74c3c; }
+
+    /* ── 하단 바 ── */
+    .basket-info { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+    .basket-count { font-size: 26px; font-weight: 800; color: #e74c3c; }
+    .submit-btn { padding: 11px 30px; font-size: 15px; font-weight: 700; border-radius: 8px; border: none; cursor: not-allowed; background: #ddd; color: #aaa; transition: all 0.2s; }
+    .submit-btn.ready { background: #27ae60; color: white; cursor: pointer; }
+    .submit-btn.ready:hover { background: #219a52; }
+
+    /* ── 플레이스홀더 ── */
+    .placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: #bbb; text-align: center; }
+  </style>
+</head>
+<body>
+<script>
+var jsPsychModule=function(e){"use strict";function t(e){return t="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e},t(e)}function r(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function n(e,t){for(var r=0;r<t.length;r++){var n=t[r];n.enumerable=n.enumerable||!1,n.configurable=!0,"value"in n&&(n.writable=!0),Object.defineProperty(e,n.key,n)}}function i(e,t,r){return t&&n(e.prototype,t),r&&n(e,r),Object.defineProperty(e,"prototype",{writable:!1}),e}function a(e,t,r){return t in e?Object.defineProperty(e,t,{value:r,enumerable:!0,configurable:!0,writable:!0}):e[t]=r,e}function o(e){return o=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)},o(e)}function s(e,t){return s=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e},s(e,t)}function l(){if("undefined"==typeof Reflect||!Reflect.construct)return!1;if(Reflect.construct.sham)return!1;if("function"==typeof Proxy)return!0;try{return Boolean.prototype.valueOf.call(Reflect.construct(Boolean,[],(function(){}))),!0}catch(e){return!1}}function u(e,t,r){return u=l()?Reflect.construct:function(e,t,r){var n=[null];n.push.apply(n,t);var i=new(Function.bind.apply(e,n));return r&&s(i,r.prototype),i},u.apply(null,arguments)}function c(e){var t="function"==typeof Map?new Map:void 0;return c=function(e){if(null===e||(r=e,-1===Function.toString.call(r).indexOf("[native code]")))return e;var r;if("function"!=typeof e)throw new TypeError("Super expression must either be null or a function");if(void 0!==t){if(t.has(e))return t.get(e);t.set(e,n)}function n(){return u(e,arguments,o(this).constructor)}return n.prototype=Object.create(e.prototype,{constructor:{value:n,enumerable:!1,writable:!0,configurable:!0}}),s(n,e)},c(e)}function h(e,t){if(t&&("object"==typeof t||"function"==typeof t))return t;if(void 0!==t)throw new TypeError("Derived constructors may only return object or undefined");return function(e){if(void 0===e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return e}(e)}function d(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){var r=null==e?null:"undefined"!=typeof Symbol&&e[Symbol.iterator]||e["@@iterator"];if(null==r)return;var n,i,a=[],o=!0,s=!1;try{for(r=r.call(e);!(o=(n=r.next()).done)&&(a.push(n.value),!t||a.length!==t);o=!0);}catch(e){s=!0,i=e}finally{try{o||null==r.return||r.return()}finally{if(s)throw i}}return a}(e,t)||p(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}function f(e){return function(e){if(Array.isArray(e))return m(e)}(e)||function(e){if("undefined"!=typeof Symbol&&null!=e[Symbol.iterator]||null!=e["@@iterator"])return Array.from(e)}(e)||p(e)||function(){throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}()}function p(e,t){if(e){if("string"==typeof e)return m(e,t);var r=Object.prototype.toString.call(e).slice(8,-1);return"Object"===r&&e.constructor&&(r=e.constructor.name),"Map"===r||"Set"===r?Array.from(e):"Arguments"===r||/^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(r)?m(e,t):void 0}}function m(e,t){(null==t||t>e.length)&&(t=e.length);for(var r=0,n=new Array(t);r<t;r++)n[r]=e[r];return n}function y(e,t){var r="undefined"!=typeof Symbol&&e[Symbol.iterator]||e["@@iterator"];if(!r){if(Array.isArray(e)||(r=p(e))||t&&e&&"number"==typeof e.length){r&&(e=r);var n=0,i=function(){};return{s:i,n:function(){return n>=e.length?{done:!0}:{done:!1,value:e[n++]}},e:function(e){throw e},f:i}}throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.")}var a,o=!0,s=!1;return{s:function(){r=r.call(e)},n:function(){var e=r.next();return o=e.done,e},e:function(e){s=!0,a=e},f:function(){try{o||null==r.return||r.return()}finally{if(s)throw a}}}}"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self&&self;function v(e,t,r,n){return new(r||(r=Promise))((function(i,a){function o(e){try{l(n.next(e))}catch(e){a(e)}}function s(e){try{l(n.throw(e))}catch(e){a(e)}}function l(e){var t;e.done?i(e.value):(t=e.value,t instanceof r?t:new r((function(e){e(t)}))).then(o,s)}l((n=n.apply(e,t||[])).next())}))}!function(e){var r=function(e){var r,n=Object.prototype,i=n.hasOwnProperty,a="function"==typeof Symbol?Symbol:{},o=a.iterator||"@@iterator",s=a.asyncIterator||"@@asyncIterator",l=a.toStringTag||"@@toStringTag";function u(e,t,r){return Object.defineProperty(e,t,{value:r,enumerable:!0,configurable:!0,writable:!0}),e[t]}try{u({},"")}catch(e){u=function(e,t,r){return e[t]=r}}function c(e,t,r,n){var i=t&&t.prototype instanceof v?t:v,a=Object.create(i.prototype),o=new L(n||[]);return a._invoke=function(e,t,r){var n=d;return function(i,a){if(n===p)throw new Error("Generator is already running");if(n===m){if("throw"===i)throw a;return I()}for(r.method=i,r.arg=a;;){var o=r.delegate;if(o){var s=P(o,r);if(s){if(s===y)continue;return s}}if("next"===r.method)r.sent=r._sent=r.arg;else if("throw"===r.method){if(n===d)throw n=m,r.arg;r.dispatchException(r.arg)}else"return"===r.method&&r.abrupt("return",r.arg);n=p;var l=h(e,t,r);if("normal"===l.type){if(n=r.done?m:f,l.arg===y)continue;return{value:l.arg,done:r.done}}"throw"===l.type&&(n=m,r.method="throw",r.arg=l.arg)}}}(e,r,o),a}function h(e,t,r){try{return{type:"normal",arg:e.call(t,r)}}catch(e){return{type:"throw",arg:e}}}e.wrap=c;var d="suspendedStart",f="suspendedYield",p="executing",m="completed",y={};function v(){}function g(){}function b(){}var w={};u(w,o,(function(){return this}));var _=Object.getPrototypeOf,k=_&&_(_(A([])));k&&k!==n&&i.call(k,o)&&(w=k);var x=b.prototype=v.prototype=Object.create(w);function T(e){["next","throw","return"].forEach((function(t){u(e,t,(function(e){return this._invoke(t,e)}))}))}function j(e,r){function n(a,o,s,l){var u=h(e[a],e,o);if("throw"!==u.type){var c=u.arg,d=c.value;return d&&"object"===t(d)&&i.call(d,"__await")?r.resolve(d.__await).then((function(e){n("next",e,s,l)}),(function(e){n("throw",e,s,l)})):r.resolve(d).then((function(e){c.value=e,s(c)}),(function(e){return n("throw",e,s,l)}))}l(u.arg)}var a;this._invoke=function(e,t){function i(){return new r((function(r,i){n(e,t,r,i)}))}return a=a?a.then(i,i):i()}}function P(e,t){var n=e.iterator[t.method];if(n===r){if(t.delegate=null,"throw"===t.method){if(e.iterator.return&&(t.method="return",t.arg=r,P(e,t),"throw"===t.method))return y;t.method="throw",t.arg=new TypeError("The iterator does not provide a 'throw' method")}return y}var i=h(n,e.iterator,t.arg);if("throw"===i.type)return t.method="throw",t.arg=i.arg,t.delegate=null,y;var a=i.arg;return a?a.done?(t[e.resultName]=a.value,t.next=e.nextLoc,"return"!==t.method&&(t.method="next",t.arg=r),t.delegate=null,y):a:(t.method="throw",t.arg=new TypeError("iterator result is not an object"),t.delegate=null,y)}function E(e){var t={tryLoc:e[0]};1 in e&&(t.catchLoc=e[1]),2 in e&&(t.finallyLoc=e[2],t.afterLoc=e[3]),this.tryEntries.push(t)}function O(e){var t=e.completion||{};t.type="normal",delete t.arg,e.completion=t}function L(e){this.tryEntries=[{tryLoc:"root"}],e.forEach(E,this),this.reset(!0)}function A(e){if(e){var t=e[o];if(t)return t.call(e);if("function"==typeof e.next)return e;if(!isNaN(e.length)){var n=-1,a=function t(){for(;++n<e.length;)if(i.call(e,n))return t.value=e[n],t.done=!1,t;return t.value=r,t.done=!0,t};return a.next=a}}return{next:I}}function I(){return{value:r,done:!0}}return g.prototype=b,u(x,"constructor",b),u(b,"constructor",g),g.displayName=u(b,l,"GeneratorFunction"),e.isGeneratorFunction=function(e){var t="function"==typeof e&&e.constructor;return!!t&&(t===g||"GeneratorFunction"===(t.displayName||t.name))},e.mark=function(e){return Object.setPrototypeOf?Object.setPrototypeOf(e,b):(e.__proto__=b,u(e,l,"GeneratorFunction")),e.prototype=Object.create(x),e},e.awrap=function(e){return{__await:e}},T(j.prototype),u(j.prototype,s,(function(){return this})),e.AsyncIterator=j,e.async=function(t,r,n,i,a){void 0===a&&(a=Promise);var o=new j(c(t,r,n,i),a);return e.isGeneratorFunction(r)?o:o.next().then((function(e){return e.done?e.value:o.next()}))},T(x),u(x,l,"Generator"),u(x,o,(function(){return this})),u(x,"toString",(function(){return"[object Generator]"})),e.keys=function(e){var t=[];for(var r in e)t.push(r);return t.reverse(),function r(){for(;t.length;){var n=t.pop();if(n in e)return r.value=n,r.done=!1,r}return r.done=!0,r}},e.values=A,L.prototype={constructor:L,reset:function(e){if(this.prev=0,this.next=0,this.sent=this._sent=r,this.done=!1,this.delegate=null,this.method="next",this.arg=r,this.tryEntries.forEach(O),!e)for(var t in this)"t"===t.charAt(0)&&i.call(this,t)&&!isNaN(+t.slice(1))&&(this[t]=r)},stop:function(){this.done=!0;var e=this.tryEntries[0].completion;if("throw"===e.type)throw e.arg;return this.rval},dispatchException:function(e){if(this.done)throw e;var t=this;function n(n,i){return s.type="throw",s.arg=e,t.next=n,i&&(t.method="next",t.arg=r),!!i}for(var a=this.tryEntries.length-1;a>=0;--a){var o=this.tryEntries[a],s=o.completion;if("root"===o.tryLoc)return n("end");if(o.tryLoc<=this.prev){var l=i.call(o,"catchLoc"),u=i.call(o,"finallyLoc");if(l&&u){if(this.prev<o.catchLoc)return n(o.catchLoc,!0);if(this.prev<o.finallyLoc)return n(o.finallyLoc)}else if(l){if(this.prev<o.catchLoc)return n(o.catchLoc,!0)}else{if(!u)throw new Error("try statement without catch or finally");if(this.prev<o.finallyLoc)return n(o.finallyLoc)}}}},abrupt:function(e,t){for(var r=this.tryEntries.length-1;r>=0;--r){var n=this.tryEntries[r];if(n.tryLoc<=this.prev&&i.call(n,"finallyLoc")&&this.prev<n.finallyLoc){var a=n;break}}a&&("break"===e||"continue"===e)&&a.tryLoc<=t&&t<=a.finallyLoc&&(a=null);var o=a?a.completion:{};return o.type=e,o.arg=t,a?(this.method="next",this.next=a.finallyLoc,y):this.complete(o)},complete:function(e,t){if("throw"===e.type)throw e.arg;return"break"===e.type||"continue"===e.type?this.next=e.arg:"return"===e.type?(this.rval=this.arg=e.arg,this.method="return",this.next="end"):"normal"===e.type&&t&&(this.next=t),y},finish:function(e){for(var t=this.tryEntries.length-1;t>=0;--t){var r=this.tryEntries[t];if(r.finallyLoc===e)return this.complete(r.completion,r.afterLoc),O(r),y}},catch:function(e){for(var t=this.tryEntries.length-1;t>=0;--t){var r=this.tryEntries[t];if(r.tryLoc===e){var n=r.completion;if("throw"===n.type){var i=n.arg;O(r)}return i}}throw new Error("illegal catch attempt")},delegateYield:function(e,t,n){return this.delegate={iterator:A(e),resultName:t,nextLoc:n},"next"===this.method&&(this.arg=r),y}},e}(e.exports);try{regeneratorRuntime=r}catch(e){"object"===("undefined"==typeof globalThis?"undefined":t(globalThis))?globalThis.regeneratorRuntime=r:Function("r","regeneratorRuntime = r")(r)}}({exports:{}});var g=function(e){var t=new Set;do{var r,n=y(Reflect.ownKeys(e));try{for(n.s();!(r=n.n()).done;){var i=r.value;t.add([e,i])}}catch(e){n.e(e)}finally{n.f()}}while((e=Reflect.getPrototypeOf(e))&&e!==Object.prototype);return t},b=function(e){var t,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{},n=r.include,i=r.exclude,a=function(e){var t=function(t){return"string"==typeof t?e===t:t.test(e)};return n?n.some(t):!i||!i.some(t)},o=y(g(e.constructor.prototype));try{for(o.s();!(t=o.n()).done;){var s=d(t.value,2),l=s[0],u=s[1];if("constructor"!==u&&a(u)){var c=Reflect.getOwnPropertyDescriptor(l,u);c&&"function"==typeof c.value&&(e[u]=e[u].bind(e))}}}catch(e){o.e(e)}finally{o.f()}return e},w=function(e){!function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),Object.defineProperty(e,"prototype",{writable:!1}),t&&s(e,t)}(u,e);var t,n,a=(t=u,n=l(),function(){var e,r=o(t);if(n){var i=o(this).constructor;e=Reflect.construct(r,arguments,i)}else e=r.apply(this,arguments);return h(this,e)});function u(){var e,t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"The global `jsPsych` variable is no longer available in jsPsych v7.";return r(this,u),(e=a.call(this,"".concat(t," Please follow the migration guide at https://www.jspsych.org/7.0/support/migration-v7/ to update your experiment."))).name="MigrationError",e}return i(u)}(c(Error));function _(e){return f(new Set(e))}function k(e){if(!e)return e;var r;if(Array.isArray(e)){r=[];var n,i=y(e);try{for(i.s();!(n=i.n()).done;){var a=n.value;r.push(k(a))}}catch(e){i.e(e)}finally{i.f()}return r}if("object"===t(e)&&null!==e){for(var o in r={},e)e.hasOwnProperty(o)&&(r[o]=k(e[o]));return r}return e}window.jsPsych={get init(){throw new w("`jsPsych.init()` was replaced by `initJsPsych()` in jsPsych v7.")},get data(){throw new w},get randomization(){throw new w},get turk(){throw new w},get pluginAPI(){throw new w},get ALL_KEYS(){throw new w('jsPsych.ALL_KEYS was replaced by the "ALL_KEYS" string in jsPsych v7.')},get NO_KEYS(){throw new w('jsPsych.NO_KEYS was replaced by the "NO_KEYS" string in jsPsych v7.')}};var x=Object.freeze({__proto__:null,unique:_,deepCopy:k,deepMerge:function e(r,n){var i={};for(var a in r)r.hasOwnProperty(a)&&("object"===t(r[a])&&n.hasOwnProperty(a)?i[a]=e(r[a],n[a]):i[a]=r[a]);for(var o in n)n.hasOwnProperty(o)&&(i.hasOwnProperty(o)&&"object"===t(n[o])?i[o]=e(i[o],n[o]):i[o]=n[o]);return i}}),T=function(){function e(){var t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:[];r(this,e),this.values=t}return i(e,[{key:"sum",value:function(){var e,t=0,r=y(this.values);try{for(r.s();!(e=r.n()).done;){t+=e.value}}catch(e){r.e(e)}finally{r.f()}return t}},{key:"mean",value:function(){return this.sum()/this.count()}},{key:"median",value:function(){if(0!==this.values.length){var e=this.values.slice(0).sort((function(e,t){return e-t})),t=Math.floor(e.length/2);return e.length%2==0?(e[t]+e[t-1])/2:e[t]}}},{key:"min",value:function(){return Math.min.apply(null,this.values)}},{key:"max",value:function(){return Math.max.apply(null,this.values)}},{key:"count",value:function(){return this.values.length}},{key:"variance",value:function(){var e,t=this.mean(),r=0,n=y(this.values);try{for(n.s();!(e=n.n()).done;){var i=e.value;r+=Math.pow(i-t,2)}}catch(e){n.e(e)}finally{n.f()}return r/(this.values.length-1)}},{key:"sd",value:function(){var e=this.variance();return Math.sqrt(e)}},{key:"frequencies",value:function(){var e,t={},r=y(this.values);try{for(r.s();!(e=r.n()).done;){var n=e.value;void 0===t[n]?t[n]=1:t[n]++}}catch(e){r.e(e)}finally{r.f()}return t}},{key:"all",value:function(e){var t,r=y(this.values);try{for(r.s();!(t=r.n()).done;){if(!e(t.value))return!1}}catch(e){r.e(e)}finally{r.f()}return!0}},{key:"subset",value:function(t){var r,n=[],i=y(this.values);try{for(i.s();!(r=i.n()).done;){var a=r.value;t(a)&&n.push(a)}}catch(e){i.e(e)}finally{i.f()}return new e(n)}}]),e}();var j,P=function(){function e(){var t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:[];r(this,e),this.trials=t}return i(e,[{key:"push",value:function(e){return this.trials.push(e),this}},{key:"join",value:function(e){return this.trials=this.trials.concat(e.values()),this}},{key:"top",value:function(){return this.trials.length<=1?this:new e([this.trials[this.trials.length-1]])}},{key:"first",value:function(){var t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:1;if(t<1)throw"You must query with a positive nonzero integer. Please use a\n               different value for n.";return 0===this.trials.length?new e:(t>this.trials.length&&(t=this.trials.length),new e(this.trials.slice(0,t)))}},{key:"last",value:function(){var t=arguments.length>0&&void 0!==arguments[0]?arguments[0]:1;if(t<1)throw"You must query with a positive nonzero integer. Please use a\n               different value for n.";return 0===this.trials.length?new e:(t>this.trials.length&&(t=this.trials.length),new e(this.trials.slice(this.trials.length-t,this.trials.length)))}},{key:"values",value:function(){return this.trials}},{key:"count",value:function(){return this.trials.length}},{key:"readOnly",value:function(){return new e(k(this.trials))}},{key:"addToAll",value:function(e){var t,r=y(this.trials);try{for(r.s();!(t=r.n()).done;){var n=t.value;Object.assign(n,e)}}catch(e){r.e(e)}finally{r.f()}return this}},{key:"addToLast",value:function(e){return 0!=this.trials.length&&Object.assign(this.trials[this.trials.length-1],e),this}},{key:"filter",value:function(t){var r;r=Array.isArray(t)?k(t):k([t]);var n,i=[],a=y(this.trials);try{for(a.s();!(n=a.n()).done;){var o,s=n.value,l=!1,u=y(r);try{for(u.s();!(o=u.n()).done;){for(var c=o.value,h=!0,d=0,f=Object.keys(c);d<f.length;d++){var p=f[d];void 0!==s[p]&&s[p]===c[p]||(h=!1)}if(h){l=!0;break}}}catch(e){u.e(e)}finally{u.f()}l&&i.push(s)}}catch(e){a.e(e)}finally{a.f()}return new e(i)}},{key:"filterCustom",value:function(t){return new e(this.trials.filter(t))}},{key:"filterColumns",value:function(t){return new e(this.trials.map((function(e){return Object.fromEntries(t.filter((function(t){return t in e})).map((function(t){return[t,e[t]]})))})))}},{key:"select",value:function(e){var t,r=[],n=y(this.trials);try{for(n.s();!(t=n.n()).done;){var i=t.value;void 0!==i[e]&&r.push(i[e])}}catch(e){n.e(e)}finally{n.f()}return new T(r)}},{key:"ignore",value:function(t){Array.isArray(t)||(t=[t]);var r,n=k(this.trials),i=y(n);try{for(i.s();!(r=i.n()).done;){var a,o=r.value,s=y(t);try{for(s.s();!(a=s.n()).done;){delete o[a.value]}}catch(e){s.e(e)}finally{s.f()}}}catch(e){i.e(e)}finally{i.f()}return new e(n)}},{key:"uniqueNames",value:function(){var e,t=[],r=y(this.trials);try{for(r.s();!(e=r.n()).done;)for(var n=e.value,i=0,a=Object.keys(n);i<a.length;i++){var o=a[i];t.includes(o)||t.push(o)}}catch(e){r.e(e)}finally{r.f()}return t}},{key:"csv",value:function(){return function(e){var r,n="object"!=t(e)?JSON.parse(e):e,i="",a="",o=[],s=y(n);try{for(s.s();!(r=s.n()).done;){var l=r.value;for(var u in l){var c=u+"";c='"'+c.replace(/"/g,'""')+'",',o.includes(u)||(o.push(u),i+=c)}}}catch(e){s.e(e)}finally{s.f()}a+=(i=i.slice(0,-1))+"\r\n";var h,d=y(n);try{for(d.s();!(h=d.n()).done;){var f=h.value;i="";var p,m=y(o);try{for(m.s();!(p=m.n()).done;){var v=p.value,g=void 0===f[v]?"":f[v];"object"==t(g)&&(g=JSON.stringify(g)),i+='"'+(g+"").replace(/"/g,'""')+'",'}}catch(e){m.e(e)}finally{m.f()}a+=(i=i.slice(0,-1))+"\r\n"}}catch(e){d.e(e)}finally{d.f()}return a}(this.trials)}},{key:"json",value:function(){var e=arguments.length>0&&void 0!==arguments[0]&&arguments[0];return e?JSON.stringify(this.trials,null,"\t"):JSON.stringify(this.trials)}},{key:"localSave",value:function(e,t){var r;if("json"===(e=e.toLowerCase()))r=this.json();else{if("csv"!==e)throw new Error('Invalid format specified for localSave. Must be "json" or "csv".');r=this.csv()}!function(e,t){var r=new Blob([e],{type:"text/plain"}),n="";n=void 0!==window.webkitURL?window.webkitURL.createObjectURL(r):window.URL.createObjectURL(r);var i=document.createElement("a");i.id="jspsych-download-as-text-link",i.style.display="none",i.download=t,i.href=n,i.click()}(r,t)}}]),e}(),E=function(){function e(t){r(this,e),this.jsPsych=t,this.dataProperties={},this.reset()}return i(e,[{key:"reset",value:function(){this.allData=new P,this.interactionData=new P}},{key:"get",value:function(){return this.allData}},{key:"getInteractionData",value:function(){return this.interactionData}},{key:"write",value:function(e){var t=this.jsPsych.getProgress(),r=this.jsPsych.getCurrentTrial(),n={trial_type:r.type.info.name,trial_index:t.current_trial_global,time_elapsed:this.jsPsych.getTotalTime(),internal_node_id:this.jsPsych.getCurrentTimelineNodeID()};this.allData.push(Object.assign(Object.assign(Object.assign(Object.assign({},e),r.data),n),this.dataProperties))}},{key:"addProperties",value:function(e){this.allData.addToAll(e),this.dataProperties=Object.assign({},this.dataProperties,e)}},{key:"addDataToLastTrial",value:function(e){this.allData.addToLast(e)}},{key:"getDataByTimelineNode",value:function(e){return this.allData.filterCustom((function(t){return t.internal_node_id.slice(0,e.length)===e}))}},{key:"getLastTrialData",value:function(){return this.allData.top()}},{key:"getLastTimelineData",value:function(){var e=this.getLastTrialData().select("internal_node_id").values[0];if(void 0===e)return new P;var t=e.substr(0,e.lastIndexOf("-"));return this.getDataByTimelineNode(t)}},{key:"displayData",value:function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"json";"json"!=(e=e.toLowerCase())&&"csv"!=e&&(console.log("Invalid format declared for displayData function. Using json as default."),e="json");var t="json"===e?this.allData.json(!0):this.allData.csv(),r=this.jsPsych.getDisplayElement();r.innerHTML='<pre id="jspsych-data-display"></pre>',document.getElementById("jspsych-data-display").textContent=t}},{key:"urlVariables",value:function(){return void 0===this.query_string&&(this.query_string=function(){for(var e=window.location.search.substr(1).split("&"),t={},r=0;r<e.length;++r){var n=e[r].split("=",2);1==n.length?t[n[0]]="":t[n[0]]=decodeURIComponent(n[1].replace(/\+/g," "))}return t}()),this.query_string}},{key:"getURLVariable",value:function(e){return this.urlVariables()[e]}},{key:"createInteractionListeners",value:function(){var e=this;window.addEventListener("blur",(function(){var t={event:"blur",trial:e.jsPsych.getProgress().current_trial_global,time:e.jsPsych.getTotalTime()};e.interactionData.push(t),e.jsPsych.getInitSettings().on_interaction_data_update(t)})),window.addEventListener("focus",(function(){var t={event:"focus",trial:e.jsPsych.getProgress().current_trial_global,time:e.jsPsych.getTotalTime()};e.interactionData.push(t),e.jsPsych.getInitSettings().on_interaction_data_update(t)}));var t=function(){var t={event:document.isFullScreen||document.webkitIsFullScreen||document.mozIsFullScreen||document.fullscreenElement?"fullscreenenter":"fullscreenexit",trial:e.jsPsych.getProgress().current_trial_global,time:e.jsPsych.getTotalTime()};e.interactionData.push(t),e.jsPsych.getInitSettings().on_interaction_data_update(t)};document.addEventListener("fullscreenchange",t),document.addEventListener("mozfullscreenchange",t),document.addEventListener("webkitfullscreenchange",t)}},{key:"_customInsert",value:function(e){this.allData=new P(e)}},{key:"_fullreset",value:function(){this.reset(),this.dataProperties={}}}]),e}(),O=function(){function e(){var t=this;r(this,e),this.hardwareConnected=!1,document.addEventListener("jspsych-activate",(function(e){t.hardwareConnected=!0}))}return i(e,[{key:"hardware",value:function(e){var t=new CustomEvent("jspsych",{detail:e});document.dispatchEvent(t)}}]),e}(),L=function(){function e(t){var n=arguments.length>1&&void 0!==arguments[1]&&arguments[1],i=arguments.length>2&&void 0!==arguments[2]?arguments[2]:0;r(this,e),this.getRootElement=t,this.areResponsesCaseSensitive=n,this.minimumValidRt=i,this.listeners=new Set,this.heldKeys=new Set,this.areRootListenersRegistered=!1,b(this),this.registerRootListeners()}return i(e,[{key:"registerRootListeners",value:function(){if(!this.areRootListenersRegistered){var e=this.getRootElement();e&&(e.addEventListener("keydown",this.rootKeydownListener),e.addEventListener("keyup",this.rootKeyupListener),this.areRootListenersRegistered=!0)}}},{key:"rootKeydownListener",value:function(e){for(var t=0,r=Array.from(this.listeners);t<r.length;t++){(0,r[t])(e)}this.heldKeys.add(this.toLowerCaseIfInsensitive(e.key))}},{key:"toLowerCaseIfInsensitive",value:function(e){return this.areResponsesCaseSensitive?e:e.toLowerCase()}},{key:"rootKeyupListener",value:function(e){this.heldKeys.delete(this.toLowerCaseIfInsensitive(e.key))}},{key:"isResponseValid",value:function(e,t,r){return!(!t&&this.heldKeys.has(r))&&("ALL_KEYS"===e||"NO_KEYS"!==e&&e.includes(r))}},{key:"getKeyboardResponse",value:function(e){var t=this,r=e.callback_function,n=e.valid_responses,i=void 0===n?"ALL_KEYS":n,a=e.rt_method,o=void 0===a?"performance":a,s=e.persist,l=e.audio_context,u=e.audio_context_start_time,c=e.allow_held_key,h=void 0!==c&&c,d=e.minimum_valid_rt,f=void 0===d?this.minimumValidRt:d;"performance"!==o&&"audio"!==o&&(console.log('Invalid RT method specified in getKeyboardResponse. Defaulting to "performance" method.'),o="performance");var p="performance"===o?performance.now():1e3*u;this.registerRootListeners(),this.areResponsesCaseSensitive||"string"==typeof i||(i=i.map((function(e){return e.toLowerCase()})));var m=function e(n){var a=Math.round(("performance"==o?performance.now():1e3*l.currentTime)-p);if(!(a<f)){var u=t.toLowerCaseIfInsensitive(n.key);t.isResponseValid(i,h,u)&&(n.preventDefault(),s||t.cancelKeyboardResponse(e),r({key:u,rt:a}))}};return this.listeners.add(m),m}},{key:"cancelKeyboardResponse",value:function(e){this.listeners.delete(e)}},{key:"cancelAllKeyboardResponses",value:function(){this.listeners.clear()}},{key:"compareKeys",value:function(e,t){if(!("string"!=typeof e&&null!==e||"string"!=typeof t&&null!==t))return"string"==typeof e&&"string"==typeof t?this.areResponsesCaseSensitive?e===t:e.toLowerCase()===t.toLowerCase():null===e&&null===t;console.error("Error in jsPsych.pluginAPI.compareKeys: arguments must be key strings or null.")}}]),e}();e.ParameterType=void 0,(j=e.ParameterType||(e.ParameterType={}))[j.BOOL=0]="BOOL",j[j.STRING=1]="STRING",j[j.INT=2]="INT",j[j.FLOAT=3]="FLOAT",j[j.FUNCTION=4]="FUNCTION",j[j.KEY=5]="KEY",j[j.KEYS=6]="KEYS",j[j.SELECT=7]="SELECT",j[j.HTML_STRING=8]="HTML_STRING",j[j.IMAGE=9]="IMAGE",j[j.AUDIO=10]="AUDIO",j[j.VIDEO=11]="VIDEO",j[j.OBJECT=12]="OBJECT",j[j.COMPLEX=13]="COMPLEX",j[j.TIMELINE=14]="TIMELINE";var A={data:{type:e.ParameterType.OBJECT,pretty_name:"Data",default:{}},on_start:{type:e.ParameterType.FUNCTION,pretty_name:"On start",default:function(){}},on_finish:{type:e.ParameterType.FUNCTION,pretty_name:"On finish",default:function(){}},on_load:{type:e.ParameterType.FUNCTION,pretty_name:"On load",default:function(){}},post_trial_gap:{type:e.ParameterType.INT,pretty_name:"Post trial gap",default:null},css_classes:{type:e.ParameterType.STRING,pretty_name:"Custom CSS classes",default:null},simulation_options:{type:e.ParameterType.COMPLEX,default:null}},I=[e.ParameterType.AUDIO,e.ParameterType.IMAGE,e.ParameterType.VIDEO],S=function(){function t(e,n){r(this,t),this.useWebaudio=e,this.webaudioContext=n,this.video_buffers={},this.context=null,this.audio_buffers=[],this.preload_requests=[],this.img_cache={},this.preloadMap=new Map,this.microphone_recorder=null,this.camera_stream=null,this.camera_recorder=null}return i(t,[{key:"getVideoBuffer",value:function(e){return e.startsWith("blob:")&&(this.video_buffers[e]=e),this.video_buffers[e]}},{key:"initAudio",value:function(){this.context=this.useWebaudio?this.webaudioContext:null}},{key:"audioContext",value:function(){return null!==this.context&&"running"!==this.context.state&&this.context.resume(),this.context}},{key:"getAudioBuffer",value:function(e){var t=this;return new Promise((function(r,n){void 0===t.audio_buffers[e]||"tmp"==t.audio_buffers[e]?t.preloadAudio([e],(function(){r(t.audio_buffers[e])}),(function(){}),(function(e){n(e.error)})):r(t.audio_buffers[e])}))}},{key:"preloadAudio",value:function(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:function(){},n=arguments.length>2&&void 0!==arguments[2]?arguments[2]:function(e){},i=arguments.length>3&&void 0!==arguments[3]?arguments[3]:function(e){};e=_(e.flat());var a=0;if(0!=e.length){var o,s=function(o){var s=new XMLHttpRequest;s.open("GET",o,!0),s.responseType="arraybuffer",s.onload=function(){t.context.decodeAudioData(s.response,(function(i){t.audio_buffers[o]=i,a++,n(o),a==e.length&&r()}),(function(e){i({source:o,error:e})}))},s.onerror=function(e){var t=e;404==s.status&&(t="404"),i({source:o,error:t})},s.onloadend=function(e){404==s.status&&i({source:o,error:"404"})},s.send(),t.preload_requests.push(s)},l=function(o){var s=new Audio;s.addEventListener("canplaythrough",(function i(){t.audio_buffers[o]=s,a++,n(o),a==e.length&&r(),s.removeEventListener("canplaythrough",i)})),s.addEventListener("error",(function e(t){i({source:s.src,error:t}),s.removeEventListener("error",e)})),s.addEventListener("abort",(function e(t){i({source:s.src,error:t}),s.removeEventListener("abort",e)})),s.src=o,t.preload_requests.push(s)},u=y(e);try{for(u.s();!(o=u.n()).done;){var c=o.value;void 0!==this.audio_buffers[c]?(a++,n(c),a==e.length&&r()):(this.audio_buffers[c]="tmp",null!==this.audioContext()?s(c):l(c))}}catch(e){u.e(e)}finally{u.f()}}else r()}},{key:"preloadImages",value:function(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:function(){},n=arguments.length>2&&void 0!==arguments[2]?arguments[2]:function(e){},i=arguments.length>3&&void 0!==arguments[3]?arguments[3]:function(e){};e=_(e.flat());var a=0;if(0!==e.length)for(var o=function(o){var s=new Image,l=e[o];s.onload=function(){a++,n(l),a===e.length&&r()},s.onerror=function(e){i({source:l,error:e})},s.src=l,t.img_cache[l]=s,t.preload_requests.push(s)},s=0;s<e.length;s++)o(s);else r()}},{key:"preloadVideo",value:function(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:function(){},n=arguments.length>2&&void 0!==arguments[2]?arguments[2]:function(e){},i=arguments.length>3&&void 0!==arguments[3]?arguments[3]:function(e){};e=_(e.flat());var a=0;if(0!==e.length){var o,s=y(e);try{var l=function(){var s=o.value,l=t.video_buffers,u=new XMLHttpRequest;u.open("GET",s,!0),u.responseType="blob",u.onload=function(){if(200===u.status||0===u.status){var t=u.response;l[s]=URL.createObjectURL(t),a++,n(s),a===e.length&&r()}},u.onerror=function(e){var t=e;404==u.status&&(t="404"),i({source:s,error:t})},u.onloadend=function(e){404==u.status&&i({source:s,error:"404"})},u.send(),t.preload_requests.push(u)};for(s.s();!(o=s.n()).done;)l()}catch(e){s.e(e)}finally{s.f()}}else r()}},{key:"getAutoPreloadList",value:function(t){var r=this,n=Object.fromEntries(I.map((function(e){return[e,new Set]})));return function e(t,i){var a,o,s,l;if(void 0!==t.timeline){var u,c=y(t.timeline);try{for(c.s();!(u=c.n()).done;){e(u.value,null!==(a=t.type)&&void 0!==a?a:i)}}catch(e){c.e(e)}finally{c.f()}}else if(null===(s=null!==(o=t.type)&&void 0!==o?o:i)||void 0===s?void 0:s.info){var h=(null!==(l=t.type)&&void 0!==l?l:i).info,f=h.name,p=h.parameters;r.preloadMap.has(f)||r.preloadMap.set(f,Object.fromEntries(Object.entries(p).filter((function(e){var t=d(e,2);t[0];var r=t[1],n=r.type,i=r.preload;return I.includes(n)&&(null==i||i)})).map((function(e){var t=d(e,2);return[t[0],t[1].type]}))));for(var m=0,v=Object.entries(r.preloadMap.get(f));m<v.length;m++){var g=d(v[m],2),b=g[0],w=g[1],_=t[b],k=n[w];if("string"==typeof _)k.add(_);else if(Array.isArray(_)){var x,T=y(_.flat());try{for(T.s();!(x=T.n()).done;){var j=x.value;"string"==typeof j&&k.add(j)}}catch(e){T.e(e)}finally{T.f()}}}}}({timeline:t}),{images:f(n[e.ParameterType.IMAGE]),audio:f(n[e.ParameterType.AUDIO]),video:f(n[e.ParameterType.VIDEO])}}},{key:"cancelPreloads",value:function(){var e,t=y(this.preload_requests);try{for(t.s();!(e=t.n()).done;){var r=e.value;r.onload=function(){},r.onerror=function(){},r.oncanplaythrough=function(){},r.onabort=function(){}}}catch(e){t.e(e)}finally{t.f()}this.preload_requests=[]}},{key:"initializeMicrophoneRecorder",value:function(e){var t=new MediaRecorder(e);this.microphone_recorder=t}},{key:"getMicrophoneRecorder",value:function(){return this.microphone_recorder}},{key:"initializeCameraRecorder",value:function(e,t){this.camera_stream=e;var r=new MediaRecorder(e,t);this.camera_recorder=r}},{key:"getCameraStream",value:function(){return this.camera_stream}},{key:"getCameraRecorder",value:function(){return this.camera_recorder}}]),t}(),M=function(){function e(t,n){r(this,e),this.getDisplayContainerElement=t,this.setJsPsychTimeout=n}return i(e,[{key:"dispatchEvent",value:function(e){this.getDisplayContainerElement().dispatchEvent(e)}},{key:"keyDown",value:function(e){this.dispatchEvent(new KeyboardEvent("keydown",{key:e}))}},{key:"keyUp",value:function(e){this.dispatchEvent(new KeyboardEvent("keyup",{key:e}))}},{key:"pressKey",value:function(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]?arguments[1]:0;r>0?this.setJsPsychTimeout((function(){t.keyDown(e),t.keyUp(e)}),r):(this.keyDown(e),this.keyUp(e))}},{key:"clickTarget",value:function(e){var t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:0;t>0?this.setJsPsychTimeout((function(){e.dispatchEvent(new MouseEvent("mousedown",{bubbles:!0})),e.dispatchEvent(new MouseEvent("mouseup",{bubbles:!0})),e.dispatchEvent(new MouseEvent("click",{bubbles:!0}))}),t):(e.dispatchEvent(new MouseEvent("mousedown",{bubbles:!0})),e.dispatchEvent(new MouseEvent("mouseup",{bubbles:!0})),e.dispatchEvent(new MouseEvent("click",{bubbles:!0})))}},{key:"fillTextInput",value:function(e,t){var r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:0;r>0?this.setJsPsychTimeout((function(){e.value=t}),r):e.value=t}},{key:"getValidKey",value:function(e){var t,r=["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","0","1","2","3","4","5","6","7","8","9"," "];if("NO_KEYS"==e)t=null;else if("ALL_KEYS"==e)t=r[Math.floor(Math.random()*r.length)];else{var n=e.flat();t=n[Math.floor(Math.random()*n.length)]}return t}},{key:"mergeSimulationData",value:function(e,t){return Object.assign(Object.assign({},e),null==t?void 0:t.data)}},{key:"ensureSimulationDataConsistency",value:function(e,t){if(t.rt&&(t.rt=Math.round(t.rt)),e.trial_duration&&t.rt&&t.rt>e.trial_duration&&(t.rt=null,t.response&&(t.response=null),t.correct&&(t.correct=!1)),e.choices&&"NO_KEYS"==e.choices&&(t.rt&&(t.rt=null),t.response&&(t.response=null)),e.allow_response_before_complete&&e.sequence_reps&&e.frame_time){var r=e.sequence_reps*e.frame_time*e.stimuli.length;t.rt<r&&(t.rt=null,t.response=null)}}}]),e}(),D=function(){function e(){r(this,e),this.timeout_handlers=[]}return i(e,[{key:"setTimeout",value:function(e,t){var r=window.setTimeout(e,t);return this.timeout_handlers.push(r),r}},{key:"clearAllTimeouts",value:function(){var e,t=y(this.timeout_handlers);try{for(t.s();!(e=t.n()).done;){var r=e.value;clearTimeout(r)}}catch(e){t.e(e)}finally{t.f()}this.timeout_handlers=[]}}]),e}();var C=["ability","able","aboard","about","above","accept","accident","according","account","accurate","acres","across","act","action","active","activity","actual","actually","add","addition","additional","adjective","adult","adventure","advice","affect","afraid","after","afternoon","again","against","age","ago","agree","ahead","aid","air","airplane","alike","alive","all","allow","almost","alone","along","aloud","alphabet","already","also","although","am","among","amount","ancient","angle","angry","animal","announced","another","answer","ants","any","anybody","anyone","anything","anyway","anywhere","apart","apartment","appearance","apple","applied","appropriate","are","area","arm","army","around","arrange","arrangement","arrive","arrow","art","article","as","aside","ask","asleep","at","ate","atmosphere","atom","atomic","attached","attack","attempt","attention","audience","author","automobile","available","average","avoid","aware","away","baby","back","bad","badly","bag","balance","ball","balloon","band","bank","bar","bare","bark","barn","base","baseball","basic","basis","basket","bat","battle","be","bean","bear","beat","beautiful","beauty","became","because","become","becoming","bee","been","before","began","beginning","begun","behavior","behind","being","believed","bell","belong","below","belt","bend","beneath","bent","beside","best","bet","better","between","beyond","bicycle","bigger","biggest","bill","birds","birth","birthday","bit","bite","black","blank","blanket","blew","blind","block","blood","blow","blue","board","boat","body","bone","book","border","born","both","bottle","bottom","bound","bow","bowl","box","boy","brain","branch","brass","brave","bread","break","breakfast","breath","breathe","breathing","breeze","brick","bridge","brief","bright","bring","broad","broke","broken","brother","brought","brown","brush","buffalo","build","building","built","buried","burn","burst","bus","bush","business","busy","but","butter","buy","by","cabin","cage","cake","call","calm","came","camera","camp","can","canal","cannot","cap","capital","captain","captured","car","carbon","card","care","careful","carefully","carried","carry","case","cast","castle","cat","catch","cattle","caught","cause","cave","cell","cent","center","central","century","certain","certainly","chain","chair","chamber","chance","change","changing","chapter","character","characteristic","charge","chart","check","cheese","chemical","chest","chicken","chief","child","children","choice","choose","chose","chosen","church","circle","circus","citizen","city","class","classroom","claws","clay","clean","clear","clearly","climate","climb","clock","close","closely","closer","cloth","clothes","clothing","cloud","club","coach","coal","coast","coat","coffee","cold","collect","college","colony","color","column","combination","combine","come","comfortable","coming","command","common","community","company","compare","compass","complete","completely","complex","composed","composition","compound","concerned","condition","congress","connected","consider","consist","consonant","constantly","construction","contain","continent","continued","contrast","control","conversation","cook","cookies","cool","copper","copy","corn","corner","correct","correctly","cost","cotton","could","count","country","couple","courage","course","court","cover","cow","cowboy","crack","cream","create","creature","crew","crop","cross","crowd","cry","cup","curious","current","curve","customs","cut","cutting","daily","damage","dance","danger","dangerous","dark","darkness","date","daughter","dawn","day","dead","deal","dear","death","decide","declared","deep","deeply","deer","definition","degree","depend","depth","describe","desert","design","desk","detail","determine","develop","development","diagram","diameter","did","die","differ","difference","different","difficult","difficulty","dig","dinner","direct","direction","directly","dirt","dirty","disappear","discover","discovery","discuss","discussion","disease","dish","distance","distant","divide","division","do","doctor","does","dog","doing","doll","dollar","done","donkey","door","dot","double","doubt","down","dozen","draw","drawn","dream","dress","drew","dried","drink","drive","driven","driver","driving","drop","dropped","drove","dry","duck","due","dug","dull","during","dust","duty","each","eager","ear","earlier","early","earn","earth","easier","easily","east","easy","eat","eaten","edge","education","effect","effort","egg","eight","either","electric","electricity","element","elephant","eleven","else","empty","end","enemy","energy","engine","engineer","enjoy","enough","enter","entire","entirely","environment","equal","equally","equator","equipment","escape","especially","essential","establish","even","evening","event","eventually","ever","every","everybody","everyone","everything","everywhere","evidence","exact","exactly","examine","example","excellent","except","exchange","excited","excitement","exciting","exclaimed","exercise","exist","expect","experience","experiment","explain","explanation","explore","express","expression","extra","eye","face","facing","fact","factor","factory","failed","fair","fairly","fall","fallen","familiar","family","famous","far","farm","farmer","farther","fast","fastened","faster","fat","father","favorite","fear","feathers","feature","fed","feed","feel","feet","fell","fellow","felt","fence","few","fewer","field","fierce","fifteen","fifth","fifty","fight","fighting","figure","fill","film","final","finally","find","fine","finest","finger","finish","fire","fireplace","firm","first","fish","five","fix","flag","flame","flat","flew","flies","flight","floating","floor","flow","flower","fly","fog","folks","follow","food","foot","football","for","force","foreign","forest","forget","forgot","forgotten","form","former","fort","forth","forty","forward","fought","found","four","fourth","fox","frame","free","freedom","frequently","fresh","friend","friendly","frighten","frog","from","front","frozen","fruit","fuel","full","fully","fun","function","funny","fur","furniture","further","future","gain","game","garage","garden","gas","gasoline","gate","gather","gave","general","generally","gentle","gently","get","getting","giant","gift","girl","give","given","giving","glad","glass","globe","go","goes","gold","golden","gone","good","goose","got","government","grabbed","grade","gradually","grain","grandfather","grandmother","graph","grass","gravity","gray","great","greater","greatest","greatly","green","grew","ground","group","grow","grown","growth","guard","guess","guide","gulf","gun","habit","had","hair","half","halfway","hall","hand","handle","handsome","hang","happen","happened","happily","happy","harbor","hard","harder","hardly","has","hat","have","having","hay","he","headed","heading","health","heard","hearing","heart","heat","heavy","height","held","hello","help","helpful","her","herd","here","herself","hidden","hide","high","higher","highest","highway","hill","him","himself","his","history","hit","hold","hole","hollow","home","honor","hope","horn","horse","hospital","hot","hour","house","how","however","huge","human","hundred","hung","hungry","hunt","hunter","hurried","hurry","hurt","husband","ice","idea","identity","if","ill","image","imagine","immediately","importance","important","impossible","improve","in","inch","include","including","income","increase","indeed","independent","indicate","individual","industrial","industry","influence","information","inside","instance","instant","instead","instrument","interest","interior","into","introduced","invented","involved","iron","is","island","it","its","itself","jack","jar","jet","job","join","joined","journey","joy","judge","jump","jungle","just","keep","kept","key","kids","kill","kind","kitchen","knew","knife","know","knowledge","known","label","labor","lack","lady","laid","lake","lamp","land","language","large","larger","largest","last","late","later","laugh","law","lay","layers","lead","leader","leaf","learn","least","leather","leave","leaving","led","left","leg","length","lesson","let","letter","level","library","lie","life","lift","light","like","likely","limited","line","lion","lips","liquid","list","listen","little","live","living","load","local","locate","location","log","lonely","long","longer","look","loose","lose","loss","lost","lot","loud","love","lovely","low","lower","luck","lucky","lunch","lungs","lying","machine","machinery","mad","made","magic","magnet","mail","main","mainly","major","make","making","man","managed","manner","manufacturing","many","map","mark","market","married","mass","massage","master","material","mathematics","matter","may","maybe","me","meal","mean","means","meant","measure","meat","medicine","meet","melted","member","memory","men","mental","merely","met","metal","method","mice","middle","might","mighty","mile","military","milk","mill","mind","mine","minerals","minute","mirror","missing","mission","mistake","mix","mixture","model","modern","molecular","moment","money","monkey","month","mood","moon","more","morning","most","mostly","mother","motion","motor","mountain","mouse","mouth","move","movement","movie","moving","mud","muscle","music","musical","must","my","myself","mysterious","nails","name","nation","national","native","natural","naturally","nature","near","nearby","nearer","nearest","nearly","necessary","neck","needed","needle","needs","negative","neighbor","neighborhood","nervous","nest","never","new","news","newspaper","next","nice","night","nine","no","nobody","nodded","noise","none","noon","nor","north","nose","not","note","noted","nothing","notice","noun","now","number","numeral","nuts","object","observe","obtain","occasionally","occur","ocean","of","off","offer","office","officer","official","oil","old","older","oldest","on","once","one","only","onto","open","operation","opinion","opportunity","opposite","or","orange","orbit","order","ordinary","organization","organized","origin","original","other","ought","our","ourselves","out","outer","outline","outside","over","own","owner","oxygen","pack","package","page","paid","pain","paint","pair","palace","pale","pan","paper","paragraph","parallel","parent","park","part","particles","particular","particularly","partly","parts","party","pass","passage","past","path","pattern","pay","peace","pen","pencil","people","per","percent","perfect","perfectly","perhaps","period","person","personal","pet","phrase","physical","piano","pick","picture","pictured","pie","piece","pig","pile","pilot","pine","pink","pipe","pitch","place","plain","plan","plane","planet","planned","planning","plant","plastic","plate","plates","play","pleasant","please","pleasure","plenty","plural","plus","pocket","poem","poet","poetry","point","pole","police","policeman","political","pond","pony","pool","poor","popular","population","porch","port","position","positive","possible","possibly","post","pot","potatoes","pound","pour","powder","power","powerful","practical","practice","prepare","present","president","press","pressure","pretty","prevent","previous","price","pride","primitive","principal","principle","printed","private","prize","probably","problem","process","produce","product","production","program","progress","promised","proper","properly","property","protection","proud","prove","provide","public","pull","pupil","pure","purple","purpose","push","put","putting","quarter","queen","question","quick","quickly","quiet","quietly","quite","rabbit","race","radio","railroad","rain","raise","ran","ranch","range","rapidly","rate","rather","raw","rays","reach","read","reader","ready","real","realize","rear","reason","recall","receive","recent","recently","recognize","record","red","refer","refused","region","regular","related","relationship","religious","remain","remarkable","remember","remove","repeat","replace","replied","report","represent","require","research","respect","rest","result","return","review","rhyme","rhythm","rice","rich","ride","riding","right","ring","rise","rising","river","road","roar","rock","rocket","rocky","rod","roll","roof","room","root","rope","rose","rough","round","route","row","rubbed","rubber","rule","ruler","run","running","rush","sad","saddle","safe","safety","said","sail","sale","salmon","salt","same","sand","sang","sat","satellites","satisfied","save","saved","saw","say","scale","scared","scene","school","science","scientific","scientist","score","screen","sea","search","season","seat","second","secret","section","see","seed","seeing","seems","seen","seldom","select","selection","sell","send","sense","sent","sentence","separate","series","serious","serve","service","sets","setting","settle","settlers","seven","several","shade","shadow","shake","shaking","shall","shallow","shape","share","sharp","she","sheep","sheet","shelf","shells","shelter","shine","shinning","ship","shirt","shoe","shoot","shop","shore","short","shorter","shot","should","shoulder","shout","show","shown","shut","sick","sides","sight","sign","signal","silence","silent","silk","silly","silver","similar","simple","simplest","simply","since","sing","single","sink","sister","sit","sitting","situation","six","size","skill","skin","sky","slabs","slave","sleep","slept","slide","slight","slightly","slip","slipped","slope","slow","slowly","small","smaller","smallest","smell","smile","smoke","smooth","snake","snow","so","soap","social","society","soft","softly","soil","solar","sold","soldier","solid","solution","solve","some","somebody","somehow","someone","something","sometime","somewhere","son","song","soon","sort","sound","source","south","southern","space","speak","special","species","specific","speech","speed","spell","spend","spent","spider","spin","spirit","spite","split","spoken","sport","spread","spring","square","stage","stairs","stand","standard","star","stared","start","state","statement","station","stay","steady","steam","steel","steep","stems","step","stepped","stick","stiff","still","stock","stomach","stone","stood","stop","stopped","store","storm","story","stove","straight","strange","stranger","straw","stream","street","strength","stretch","strike","string","strip","strong","stronger","struck","structure","struggle","stuck","student","studied","studying","subject","substance","success","successful","such","sudden","suddenly","sugar","suggest","suit","sum","summer","sun","sunlight","supper","supply","support","suppose","sure","surface","surprise","surrounded","swam","sweet","swept","swim","swimming","swing","swung","syllable","symbol","system","table","tail","take","taken","tales","talk","tall","tank","tape","task","taste","taught","tax","tea","teach","teacher","team","tears","teeth","telephone","television","tell","temperature","ten","tent","term","terrible","test","than","thank","that","thee","them","themselves","then","theory","there","therefore","these","they","thick","thin","thing","think","third","thirty","this","those","thou","though","thought","thousand","thread","three","threw","throat","through","throughout","throw","thrown","thumb","thus","thy","tide","tie","tight","tightly","till","time","tin","tiny","tip","tired","title","to","tobacco","today","together","told","tomorrow","tone","tongue","tonight","too","took","tool","top","topic","torn","total","touch","toward","tower","town","toy","trace","track","trade","traffic","trail","train","transportation","trap","travel","treated","tree","triangle","tribe","trick","tried","trip","troops","tropical","trouble","truck","trunk","truth","try","tube","tune","turn","twelve","twenty","twice","two","type","typical","uncle","under","underline","understanding","unhappy","union","unit","universe","unknown","unless","until","unusual","up","upon","upper","upward","us","use","useful","using","usual","usually","valley","valuable","value","vapor","variety","various","vast","vegetable","verb","vertical","very","vessels","victory","view","village","visit","visitor","voice","volume","vote","vowel","voyage","wagon","wait","walk","wall","want","war","warm","warn","was","wash","waste","watch","water","wave","way","we","weak","wealth","wear","weather","week","weigh","weight","welcome","well","went","were","west","western","wet","whale","what","whatever","wheat","wheel","when","whenever","where","wherever","whether","which","while","whispered","whistle","white","who","whole","whom","whose","why","wide","widely","wife","wild","will","willing","win","wind","window","wing","winter","wire","wise","wish","with","within","without","wolf","women","won","wonder","wonderful","wood","wooden","wool","word","wore","work","worker","world","worried","worry","worse","worth","would","wrapped","write","writer","writing","written","wrong","wrote","yard","year","yellow","yes","yesterday","yet","you","young","younger","your","yourself","youth","zero","zebra","zipper","zoo","zulu"];function R(e){function t(){return e&&e.maxLength>1?function(){var t,n=!1;for(;!n;)(t=r()).length<=e.maxLength&&(n=!0);return t}():r()}function r(){return C[n(C.length)]}function n(e){return Math.floor(Math.random()*e)}if(void 0===e)return t();"number"==typeof e&&(e={exactly:e}),e.exactly&&(e.min=e.exactly,e.max=e.exactly),"number"!=typeof e.wordsPerString&&(e.wordsPerString=1),"function"!=typeof e.formatter&&(e.formatter=function(e){return e}),"string"!=typeof e.separator&&(e.separator=" ");for(var i=e.min+n(e.max+1-e.min),a=[],o="",s=0,l=0;l<i*e.wordsPerString;l++)s===e.wordsPerString-1?o+=e.formatter(t(),s):o+=e.formatter(t(),s)+e.separator,s++,(l+1)%e.wordsPerString==0&&(a.push(o),o="",s=0);return"string"==typeof e.join&&(a=a.join(e.join)),a}var N=R;R.wordList=C;var V={exports:{}};(function(e,r,n){function i(e){var t,r=this,n=(t=4022871197,function(e){e=String(e);for(var r=0;r<e.length;r++){var n=.02519603282416938*(t+=e.charCodeAt(r));n-=t=n>>>0,t=(n*=t)>>>0,t+=4294967296*(n-=t)}return 2.3283064365386963e-10*(t>>>0)});r.next=function(){var e=2091639*r.s0+2.3283064365386963e-10*r.c;return r.s0=r.s1,r.s1=r.s2,r.s2=e-(r.c=0|e)},r.c=1,r.s0=n(" "),r.s1=n(" "),r.s2=n(" "),r.s0-=n(e),r.s0<0&&(r.s0+=1),r.s1-=n(e),r.s1<0&&(r.s1+=1),r.s2-=n(e),r.s2<0&&(r.s2+=1),n=null}function a(e,t){return t.c=e.c,t.s0=e.s0,t.s1=e.s1,t.s2=e.s2,t}function o(e,r){var n=new i(e),o=r&&r.state,s=n.next;return s.int32=function(){return 4294967296*n.next()|0},s.double=function(){return s()+11102230246251565e-32*(2097152*s()|0)},s.quick=s,o&&("object"==t(o)&&a(o,n),s.state=function(){return a(n,{})}),s}r&&r.exports?r.exports=o:n&&n.amd?n((function(){return o})):this.alea=o})(0,V,!1);var q=V.exports;function z(e,r){var n=arguments.length>2&&void 0!==arguments[2]&&arguments[2],i=Array.isArray(e),a=Array.isArray(r);if(i)if(a){if(e.length!=r.length)if(console.warn("Unclear parameters given to randomization.repeat. Items and repetitions are unequal lengths. Behavior may not be as expected."),r.length<e.length){for(var o=[],s=0;s<e.length;s++)o.push(r);r=o}else r=r.slice(0,e.length)}else{for(var l=[],u=0;u<e.length;u++)l.push(r);r=l}else a?(r=[r[0]],console.log("Unclear parameters given to randomization.repeat. Multiple set sizes specified, but only one item exists to sample. Proceeding using the first set size.")):(e=[e],r=[r]);for(var c=[],h=0;h<e.length;h++)for(var d=0;d<r[h];d++)null==e[h]||"object"!=t(e[h])?c.push(e[h]):c.push(Object.assign({},e[h]));var f=K(c);return n&&(f=W(f)),f}function K(e){Array.isArray(e)||console.error("Argument to shuffle() must be an array.");for(var t,r,n=e.slice(0),i=n.length;i;)r=Math.floor(Math.random()*i--),t=n[i],n[i]=n[r],n[r]=t;return n}function F(e){var t=arguments.length>1&&void 0!==arguments[1]&&arguments[1],r=e.length;if(1==r)return console.warn("shuffleAlternateGroups() was called with only one group. Defaulting to simple shuffle."),K(e[0]);for(var n=[],i=0;i<r;i++)n.push(i);t&&(n=K(n));for(var a=[],o=null,s=0;s<r;s++)o=null===o?e[s].length:Math.min(o,e[s].length),a.push(K(e[s]));for(var l=[],u=0;u<o;u++)for(var c=0;c<n.length;c++)l.push(a[n[c]][u]);return l}function U(e,t){return Array.isArray(e)||console.error("First argument to sampleWithoutReplacement() must be an array"),t>e.length&&console.error("Cannot take a sample larger than the size of the set of items to sample."),K(e).slice(0,t)}function Y(e,t,r){Array.isArray(e)||console.error("First argument to sampleWithReplacement() must be an array");var n=[];if(void 0!==r){r.length!==e.length&&console.error("The length of the weights array must equal the length of the array to be sampled from.");var i,a=0,o=y(r);try{for(o.s();!(i=o.n()).done;){a+=i.value}}catch(e){o.e(e)}finally{o.f()}var s,l=y(r);try{for(l.s();!(s=l.n()).done;){var u=s.value;n.push(u/a)}}catch(e){l.e(e)}finally{l.f()}}else for(var c=0;c<e.length;c++)n.push(1/e.length);for(var h=[n[0]],d=1;d<n.length;d++)h.push(n[d]+h[d-1]);for(var f=[],p=0;p<t;p++){for(var m=Math.random(),v=0;m>h[v];)v++;f.push(e[v])}return f}function B(e,t){return function(){var e=0,t=0;for(;0===e;)e=Math.random();for(;0===t;)t=Math.random();return Math.sqrt(-2*Math.log(e))*Math.cos(2*Math.PI*t)}()*t+e}function G(e){return-Math.log(Math.random())/e}function W(e){var t,r={},n=y(e);try{for(n.s();!(t=n.n()).done;)for(var i=t.value,a=0,o=Object.keys(i);a<o.length;a++){var s=o[a];void 0===r[s]&&(r[s]=[]),r[s].push(i[s])}}catch(e){n.e(e)}finally{n.f()}return r}var J=Object.freeze({__proto__:null,setSeed:function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:Math.random().toString();return Math.random=q(e),e},repeat:z,shuffle:K,shuffleNoRepeats:function(e,t){Array.isArray(e)||console.error("First argument to shuffleNoRepeats() must be an array."),void 0!==t&&"function"!=typeof t&&console.error("Second argument to shuffleNoRepeats() must be a function."),void 0===t&&(t=function(e,t){return e===t});for(var r=K(e),n=0;n<r.length-1;n++)if(t(r[n],r[n+1])){for(var i=Math.floor(Math.random()*(r.length-2))+1;t(r[n+1],r[i])||t(r[n+1],r[i+1])||t(r[n+1],r[i-1])||t(r[n],r[i]);)i=Math.floor(Math.random()*(r.length-2))+1;var a=r[i];r[i]=r[n+1],r[n+1]=a}return r},shuffleAlternateGroups:F,sampleWithoutReplacement:U,sampleWithReplacement:Y,factorial:function(e){for(var t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:1,r=arguments.length>2&&void 0!==arguments[2]&&arguments[2],n=[{}],i=0,o=Object.entries(e);i<o.length;i++){var s,l=d(o[i],2),u=l[0],c=l[1],h=[],f=y(c);try{for(f.s();!(s=f.n()).done;){var p,m=s.value,v=y(n);try{for(v.s();!(p=v.n()).done;){var g=p.value;h.push(Object.assign(Object.assign({},g),a({},u,m)))}}catch(e){v.e(e)}finally{v.f()}}}catch(e){f.e(e)}finally{f.f()}n=h}return z(n,t,r)},randomID:function(){for(var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:32,t="",r="0123456789abcdefghjklmnopqrstuvwxyz",n=0;n<e;n++)t+=r[Math.floor(Math.random()*r.length)];return t},randomInt:function(e,t){if(t<e)throw new Error("Upper boundary must be less than or equal to lower boundary");return e+Math.floor(Math.random()*(t-e+1))},sampleBernoulli:function(e){return Math.random()<=e?1:0},sampleNormal:B,sampleExponential:G,sampleExGaussian:function(e,t,r){var n=arguments.length>3&&void 0!==arguments[3]&&arguments[3],i=B(e,t)+G(r);if(n)for(;i<=0;)i=B(e,t)+G(r);return i},randomWords:function(e){return N(e)}});function H(){var e={previewMode:!1,outsideTurk:!1,hitId:"INVALID_URL_PARAMETER",assignmentId:"INVALID_URL_PARAMETER",workerId:"INVALID_URL_PARAMETER",turkSubmitTo:"INVALID_URL_PARAMETER"},t=function(e,t){t=t.replace(/[\[]/,"\\[").replace(/[\]]/,"\\]");var r=new RegExp("[\\?&]"+t+"=([^&#]*)").exec(e);return null==r?"":r[1]},r=t(window.location.href,"assignmentId")?window.location.href:document.referrer;return["assignmentId","hitId","workerId","turkSubmitTo"].map((function(n){e[n]=unescape(t(r,n))})),e.previewMode="ASSIGNMENT_ID_NOT_AVAILABLE"==e.assignmentId,e.outsideTurk=!e.previewMode&&""===e.hitId&&""==e.assignmentId&&""==e.workerId,e}var X=Object.freeze({__proto__:null,turkInfo:H,submitToTurk:function(e){var t=H(),r=t.assignmentId,n=t.turkSubmitTo;if(r&&n){var i=document.createElement("form");for(var a in i.method="POST",i.action=n+"/mturk/externalSubmit?assignmentId="+r,e)if(e.hasOwnProperty(a)){var o=document.createElement("input");o.type="hidden",o.name=a,o.id=a,o.value=e[a],i.appendChild(o)}document.body.appendChild(i),i.submit()}}}),$=function(){function e(n,i,a,o){if(r(this,e),this.jsPsych=n,this.progress={current_location:-1,current_variable_set:0,current_repetition:0,current_iteration:0,done:!1},this.parent_node=a,this.relative_id=void 0===a?0:o,void 0!==i.timeline){this.timeline_parameters={timeline:[],loop_function:i.loop_function,conditional_function:i.conditional_function,sample:i.sample,randomize_order:void 0!==i.randomize_order&&i.randomize_order,repetitions:void 0===i.repetitions?1:i.repetitions,timeline_variables:void 0===i.timeline_variables?[{}]:i.timeline_variables,on_timeline_finish:i.on_timeline_finish,on_timeline_start:i.on_timeline_start},this.setTimelineVariablesOrder();var s=Object.assign({},i);delete s.timeline,delete s.conditional_function,delete s.loop_function,delete s.randomize_order,delete s.repetitions,delete s.timeline_variables,delete s.sample,delete s.on_timeline_start,delete s.on_timeline_finish,this.node_trial_data=s;for(var l=0;l<i.timeline.length;l++){var u=Object.assign({},s,i.timeline[l]);if("object"==t(s.data)&&"object"==t(i.timeline[l].data)){var c=Object.assign({},s.data,i.timeline[l].data);u.data=c}this.timeline_parameters.timeline.push(new e(this.jsPsych,u,this,l))}}else void 0===i.type&&console.error('Trial level node is missing the "type" parameter. The parameters for the node are: '+JSON.stringify(i)),this.trial_parameters=Object.assign({},i)}return i(e,[{key:"trial",value:function(){return void 0===this.timeline_parameters?k(this.trial_parameters):this.progress.current_location>=this.timeline_parameters.timeline.length?null:this.timeline_parameters.timeline[this.progress.current_location].trial()}},{key:"markCurrentTrialComplete",value:function(){void 0===this.timeline_parameters?this.progress.done=!0:this.timeline_parameters.timeline[this.progress.current_location].markCurrentTrialComplete()}},{key:"nextRepetiton",value:function(){this.setTimelineVariablesOrder(),this.progress.current_location=-1,this.progress.current_variable_set=0,this.progress.current_repetition++;for(var e=0;e<this.timeline_parameters.timeline.length;e++)this.timeline_parameters.timeline[e].reset()}},{key:"setTimelineVariablesOrder",value:function(){var e=this.timeline_parameters;if(void 0!==e&&void 0!==e.timeline_variables){for(var t=[],r=0;r<e.timeline_variables.length;r++)t.push(r);void 0!==e.sample&&("custom"==e.sample.type?t=e.sample.fn(t):"with-replacement"==e.sample.type?t=Y(t,e.sample.size,e.sample.weights):"without-replacement"==e.sample.type?t=U(t,e.sample.size):"fixed-repetitions"==e.sample.type?t=z(t,e.sample.size,!1):"alternate-groups"==e.sample.type?t=F(e.sample.groups,e.sample.randomize_group_order):console.error('Invalid type in timeline sample parameters. Valid options for type are "custom", "with-replacement", "without-replacement", "fixed-repetitions", and "alternate-groups"')),e.randomize_order&&(t=K(t)),this.progress.order=t}}},{key:"nextSet",value:function(){this.progress.current_location=-1,this.progress.current_variable_set++;for(var e=0;e<this.timeline_parameters.timeline.length;e++)this.timeline_parameters.timeline[e].reset()}},{key:"advance",value:function(){var e=this.progress,t=this.timeline_parameters,r=this.jsPsych.internal;if(e.done)return!0;if(-1==e.current_location){if(void 0!==t){if(void 0!==t.conditional_function&&0==e.current_repetition&&0==e.current_variable_set){r.call_immediate=!0;var n=t.conditional_function();if(r.call_immediate=!1,0==n)return e.done=!0,!0}void 0!==t.on_timeline_start&&0==e.current_variable_set&&t.on_timeline_start()}return e.current_location=0,this.advance()}if(void 0!==t){for(var i=!1;e.current_location<t.timeline.length&&0==i;){if(!t.timeline[e.current_location].advance())return i=!0,!1;e.current_location++}return e.current_variable_set<e.order.length-1?(this.nextSet(),this.advance()):e.current_repetition<t.repetitions-1?(this.nextRepetiton(),void 0!==t.on_timeline_finish&&t.on_timeline_finish(),this.advance()):(void 0!==t.on_timeline_finish&&t.on_timeline_finish(),void 0!==t.loop_function?(r.call_immediate=!0,t.loop_function(this.generatedData())?(this.reset(),r.call_immediate=!1,this.parent_node.advance()):(e.done=!0,r.call_immediate=!1,!0)):(e.done=!0,!0))}}},{key:"isComplete",value:function(){return this.progress.done}},{key:"getTimelineVariableValue",value:function(e){if(void 0!==this.timeline_parameters)return this.timeline_parameters.timeline_variables[this.progress.order[this.progress.current_variable_set]][e]}},{key:"findTimelineVariable",value:function(e){var t=this.getTimelineVariableValue(e);return void 0===t?void 0!==this.parent_node?this.parent_node.findTimelineVariable(e):void 0:t}},{key:"timelineVariable",value:function(e){if(void 0===this.timeline_parameters){var t=this.findTimelineVariable(e);return void 0===t&&console.warn("Timeline variable "+e+" not found."),t}var r=Math.max(0,this.progress.current_location);r==this.timeline_parameters.timeline.length&&(r-=1);var n=this.timeline_parameters.timeline[r].timelineVariable(e);return void 0===n&&console.warn("Timeline variable "+e+" not found."),n}},{key:"allTimelineVariables",value:function(){for(var e=this.allTimelineVariablesNames(),t={},r=0;r<e.length;r++)t[e[r]]=this.timelineVariable(e[r]);return t}},{key:"allTimelineVariablesNames",value:function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:[];if(void 0!==this.timeline_parameters){e=e.concat(Object.keys(this.timeline_parameters.timeline_variables[this.progress.order[this.progress.current_variable_set]]));var t=Math.max(0,this.progress.current_location);return t==this.timeline_parameters.timeline.length&&(t-=1),this.timeline_parameters.timeline[t].allTimelineVariablesNames(e)}if(void 0===this.timeline_parameters)return e}},{key:"length",value:function(){var e=0;if(void 0===this.timeline_parameters)return 1;for(var t=0;t<this.timeline_parameters.timeline.length;t++)e+=this.timeline_parameters.timeline[t].length();return e}},{key:"percentComplete",value:function(){for(var e=this.length(),t=0,r=0;r<this.timeline_parameters.timeline.length;r++)this.timeline_parameters.timeline[r].isComplete()&&(t+=this.timeline_parameters.timeline[r].length());return t/e*100}},{key:"reset",value:function(){if(this.progress.current_location=-1,this.progress.current_repetition=0,this.progress.current_variable_set=0,this.progress.current_iteration++,this.progress.done=!1,this.setTimelineVariablesOrder(),void 0!==this.timeline_parameters)for(var e=0;e<this.timeline_parameters.timeline.length;e++)this.timeline_parameters.timeline[e].reset()}},{key:"end",value:function(){this.progress.done=!0}},{key:"endActiveNode",value:function(){void 0===this.timeline_parameters?(this.end(),this.parent_node.end()):this.timeline_parameters.timeline[this.progress.current_location].endActiveNode()}},{key:"ID",value:function(){var e="";return void 0===this.parent_node?"0."+this.progress.current_iteration:(e+=this.parent_node.ID()+"-",e+=this.relative_id+"."+this.progress.current_iteration)}},{key:"activeID",value:function(){return void 0===this.timeline_parameters?this.ID():this.timeline_parameters.timeline[this.progress.current_location].activeID()}},{key:"generatedData",value:function(){return this.jsPsych.data.getDataByTimelineNode(this.ID())}},{key:"trialsOfType",value:function(e){if(void 0===this.timeline_parameters)return this.trial_parameters.type==e?this.trial_parameters:[];for(var t=[],r=0;r<this.timeline_parameters.timeline.length;r++){var n=this.timeline_parameters.timeline[r].trialsOfType(e);t=t.concat(n)}return t}},{key:"insert",value:function(t){void 0===this.timeline_parameters?console.error("Cannot add new trials to a trial-level node."):this.timeline_parameters.timeline.push(new e(this.jsPsych,Object.assign(Object.assign({},this.node_trial_data),t),this,this.timeline_parameters.timeline.length))}}]),e}();function Q(e){return new Promise((function(t){return setTimeout(t,e)}))}var Z=function(){function n(e){var t,i,a,o,s,l,u;r(this,n),this.extensions={},this.turk=X,this.randomization=J,this.utils=x,this.opts={},this.global_trial_index=0,this.current_trial={},this.current_trial_finished=!1,this.paused=!1,this.waiting=!1,this.file_protocol=!1,this.simulation_mode=null,this.webaudio_context=null,this.internal={call_immediate:!1},this.progress_bar_amount=0,e=Object.assign({display_element:void 0,on_finish:function(){},on_trial_start:function(){},on_trial_finish:function(){},on_data_update:function(){},on_interaction_data_update:function(){},on_close:function(){},use_webaudio:!0,exclusions:{},show_progress_bar:!1,message_progress_bar:"Completion Progress",auto_update_progress_bar:!0,default_iti:0,minimum_valid_rt:0,experiment_width:null,override_safe_mode:!1,case_sensitive_responses:!1,extensions:[]},e),this.opts=e,b(this),this.webaudio_context="undefined"!=typeof window&&void 0!==window.AudioContext?new AudioContext:null,"file:"!=window.location.protocol||!1!==e.override_safe_mode&&void 0!==e.override_safe_mode||(e.use_webaudio=!1,this.file_protocol=!0,console.warn("jsPsych detected that it is running via the file:// protocol and not on a web server. To prevent issues with cross-origin requests, Web Audio and video preloading have been disabled. If you would like to override this setting, you can set 'override_safe_mode' to 'true' in initJsPsych. For more information, see: https://www.jspsych.org/overview/running-experiments")),this.data=new E(this),this.pluginAPI=(i=(t=this).getInitSettings(),a=b(new L(t.getDisplayContainerElement,i.case_sensitive_responses,i.minimum_valid_rt)),o=b(new D),s=b(new S(i.use_webaudio,t.webaudio_context)),l=b(new O),u=b(new M(t.getDisplayContainerElement,o.setTimeout)),Object.assign.apply(Object,[{}].concat([a,o,s,l,u])));var c,h=y(e.extensions);try{for(h.s();!(c=h.n()).done;){var d=c.value;this.extensions[d.type.info.name]=new d.type(this)}}catch(e){h.e(e)}finally{h.f()}this.pluginAPI.initAudio()}return i(n,[{key:"version",value:function(){return"7.3.3"}},{key:"run",value:function(e){return v(this,void 0,void 0,regeneratorRuntime.mark((function t(){return regeneratorRuntime.wrap((function(t){for(;;)switch(t.prev=t.next){case 0:return void 0===e&&console.error("No timeline declared in jsPsych.run. Cannot start experiment."),0===e.length&&console.error("No trials have been added to the timeline (the timeline is an empty array). Cannot start experiment."),this.timelineDescription=e,this.timeline=new $(this,{timeline:e}),t.next=6,this.prepareDom();case 6:return t.next=8,this.checkExclusions(this.opts.exclusions);case 8:return t.next=10,this.loadExtensions(this.opts.extensions);case 10:return document.documentElement.setAttribute("jspsych","present"),this.startExperiment(),t.next=14,this.finished;case 14:case"end":return t.stop()}}),t,this)})))}},{key:"simulate",value:function(e){var t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:"data-only",r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:{};return v(this,void 0,void 0,regeneratorRuntime.mark((function n(){return regeneratorRuntime.wrap((function(n){for(;;)switch(n.prev=n.next){case 0:return this.simulation_mode=t,this.simulation_options=r,n.next=4,this.run(e);case 4:case"end":return n.stop()}}),n,this)})))}},{key:"getProgress",value:function(){return{total_trials:void 0===this.timeline?void 0:this.timeline.length(),current_trial_global:this.global_trial_index,percent_complete:void 0===this.timeline?0:this.timeline.percentComplete()}}},{key:"getStartTime",value:function(){return this.exp_start_time}},{key:"getTotalTime",value:function(){return void 0===this.exp_start_time?0:(new Date).getTime()-this.exp_start_time.getTime()}},{key:"getDisplayElement",value:function(){return this.DOM_target}},{key:"getDisplayContainerElement",value:function(){return this.DOM_container}},{key:"finishTrial",value:function(){var e,r=this,n=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{};if(!this.current_trial_finished){var i;if(this.current_trial_finished=!0,void 0!==this.current_trial.css_classes&&Array.isArray(this.current_trial.css_classes))(i=this.DOM_target.classList).remove.apply(i,f(this.current_trial.css_classes));this.data.write(n);var a=this.data.getLastTrialData(),o=a.values()[0],s=this.current_trial;if("object"===t(s.save_trial_parameters))for(var l=0,u=Object.keys(s.save_trial_parameters);l<u.length;l++){var c=u[l],h=s.save_trial_parameters[c];!0===h&&(void 0===s[c]?console.warn('Invalid parameter specified in save_trial_parameters. Trial has no property called "'.concat(c,'".')):"function"==typeof s[c]?o[c]=s[c].toString():o[c]=s[c]),!1===h&&"internal_node_id"!==c&&"trial_index"!==c&&delete o[c]}var d=(null!==(e=s.extensions)&&void 0!==e?e:[]).map((function(e){return r.extensions[e.type.info.name].on_finish(e.params)})),p=function(){r.internal.call_immediate=!0,"function"==typeof s.on_finish&&s.on_finish(o),r.opts.on_trial_finish(o),r.opts.on_data_update(o),r.internal.call_immediate=!1,"data-only"===r.simulation_mode?r.nextTrial():null===typeof s.post_trial_gap||void 0===s.post_trial_gap?r.opts.default_iti>0?setTimeout(r.nextTrial,r.opts.default_iti):r.nextTrial():s.post_trial_gap>0?setTimeout(r.nextTrial,s.post_trial_gap):r.nextTrial()};if(d.some((function(e){return"function"==typeof e.then})))Promise.all(d.map((function(e){return Promise.resolve(e).then((function(e){Object.assign(o,e)}))}))).then(p);else{var m,v=y(d);try{for(v.s();!(m=v.n()).done;){var g=m.value;Object.assign(o,g)}}catch(e){v.e(e)}finally{v.f()}p()}}}},{key:"endExperiment",value:function(){var e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:"",t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{};this.timeline.end_message=e,this.timeline.end(),this.pluginAPI.cancelAllKeyboardResponses(),this.pluginAPI.clearAllTimeouts(),this.finishTrial(t)}},{key:"endCurrentTimeline",value:function(){this.timeline.endActiveNode()}},{key:"getCurrentTrial",value:function(){return this.current_trial}},{key:"getInitSettings",value:function(){return this.opts}},{key:"getCurrentTimelineNodeID",value:function(){return this.timeline.activeID()}},{key:"timelineVariable",value:function(e){var t=this,r=arguments.length>1&&void 0!==arguments[1]&&arguments[1];return this.internal.call_immediate||!0===r?this.timeline.timelineVariable(e):{timelineVariablePlaceholder:!0,timelineVariableFunction:function(){return t.timeline.timelineVariable(e)}}}},{key:"getAllTimelineVariables",value:function(){return this.timeline.allTimelineVariables()}},{key:"addNodeToEndOfTimeline",value:function(e,t){this.timeline.insert(e)}},{key:"pauseExperiment",value:function(){this.paused=!0}},{key:"resumeExperiment",value:function(){this.paused=!1,this.waiting&&(this.waiting=!1,this.nextTrial())}},{key:"loadFail",value:function(e){e=e||"<p>The experiment failed to load.</p>",this.DOM_target.innerHTML=e}},{key:"getSafeModeStatus",value:function(){return this.file_protocol}},{key:"getTimeline",value:function(){return this.timelineDescription}},{key:"prepareDom",value:function(){return v(this,void 0,void 0,regeneratorRuntime.mark((function e(){var t,r;return regeneratorRuntime.wrap((function(e){for(;;)switch(e.prev=e.next){case 0:if("complete"===document.readyState){e.next=3;break}return e.next=3,new Promise((function(e){window.addEventListener("load",e)}));case 3:void 0===(t=this.opts).display_element?(null===document.querySelector("body")&&document.documentElement.appendChild(document.createElement("body")),document.querySelector("html").style.height="100%",document.querySelector("body").style.margin="0px",document.querySelector("body").style.height="100%",document.querySelector("body").style.width="100%",t.display_element=document.querySelector("body")):null===(r=t.display_element instanceof Element?t.display_element:document.querySelector("#"+t.display_element))?console.error("The display_element specified in initJsPsych() does not exist in the DOM."):t.display_element=r,t.display_element.innerHTML='<div class="jspsych-content-wrapper"><div id="jspsych-content"></div></div>',this.DOM_container=t.display_element,this.DOM_target=document.querySelector("#jspsych-content"),null!==t.experiment_width&&(this.DOM_target.style.width=t.experiment_width+"px"),t.display_element.tabIndex=0,-1===t.display_element.className.indexOf("jspsych-display-element")&&(t.display_element.className+=" jspsych-display-element"),this.DOM_target.className+="jspsych-content",this.data.createInteractionListeners(),window.addEventListener("beforeunload",t.on_close);case 14:case"end":return e.stop()}}),e,this)})))}},{key:"loadExtensions",value:function(e){return v(this,void 0,void 0,regeneratorRuntime.mark((function t(){var r=this;return regeneratorRuntime.wrap((function(t){for(;;)switch(t.prev=t.next){case 0:return t.prev=0,t.next=3,Promise.all(e.map((function(e){return r.extensions[e.type.info.name].initialize(e.params||{})})));case 3:t.next=9;break;case 5:throw t.prev=5,t.t0=t.catch(0),console.error(t.t0),new Error(t.t0);case 9:case"end":return t.stop()}}),t,null,[[0,5]])})))}},{key:"startExperiment",value:function(){var e=this;this.finished=new Promise((function(t){e.resolveFinishedPromise=t})),!0===this.opts.show_progress_bar&&this.drawProgressBar(this.opts.message_progress_bar),this.exp_start_time=new Date,this.timeline.advance(),this.doTrial(this.timeline.trial())}},{key:"finishExperiment",value:function(){var e=this,t=this.opts.on_finish(this.data.get()),r=function(){void 0!==e.timeline.end_message&&(e.DOM_target.innerHTML=e.timeline.end_message),e.resolveFinishedPromise()};t?Promise.resolve(t).then(r):r()}},{key:"nextTrial",value:function(){if(this.paused)this.waiting=!0;else{this.global_trial_index++,this.timeline.markCurrentTrialComplete();var e=this.timeline.advance();!0===this.opts.show_progress_bar&&!0===this.opts.auto_update_progress_bar&&this.updateProgressBar(),e?this.finishExperiment():this.doTrial(this.timeline.trial())}}},{key:"doTrial",value:function(e){var t,r=this;if(this.current_trial=e,this.current_trial_finished=!1,this.evaluateTimelineVariables(e),"string"==typeof e.type)throw new w("A string was provided as the trial's `type` parameter. Since jsPsych v7, the `type` parameter needs to be a plugin object.");if(e.type=Object.assign(Object.assign({},b(new e.type(this))),{info:e.type.info}),this.evaluateFunctionParameters(e),this.setDefaultValues(e),this.internal.call_immediate=!0,this.opts.on_trial_start(e),"function"==typeof e.on_start&&e.on_start(e),Array.isArray(e.extensions)){var n,i=y(e.extensions);try{for(i.s();!(n=i.n()).done;){var a=n.value;this.extensions[a.type.info.name].on_start(a.params)}}catch(e){i.e(e)}finally{i.f()}}(this.DOM_container.focus(),this.DOM_target.scrollTop=0,void 0!==e.css_classes)&&(Array.isArray(e.css_classes)||"string"!=typeof e.css_classes||(e.css_classes=[e.css_classes]),Array.isArray(e.css_classes)&&(t=this.DOM_target.classList).add.apply(t,f(e.css_classes)));var o,s,l,u=function(){if("function"==typeof e.on_load&&e.on_load(),Array.isArray(e.extensions)){var t,n=y(e.extensions);try{for(n.s();!(t=n.n()).done;){var i=t.value;r.extensions[i.type.info.name].on_load(i.params)}}catch(e){n.e(e)}finally{n.f()}}};this.simulation_mode||(o=e.type.trial(this.DOM_target,e,u)),this.simulation_mode&&(e.type.simulate?(e.simulation_options||(s=this.simulation_options.default),e.simulation_options&&("string"==typeof e.simulation_options?this.simulation_options[e.simulation_options]?s=this.simulation_options[e.simulation_options]:this.simulation_options.default?(console.log('No matching simulation options found for "'.concat(e.simulation_options,'". Using "default" options.')),s=this.simulation_options.default):(console.log('No matching simulation options found for "'.concat(e.simulation_options,'" and no "default" options provided. Using the default values provided by the plugin.')),s={}):s=e.simulation_options),l=this.utils.deepMerge(this.simulation_options.default,s),l=this.utils.deepCopy(l),o=!1===(null==(l=this.replaceFunctionsWithValues(l,null))?void 0:l.simulate)?e.type.trial(this.DOM_target,e,u):e.type.simulate(e,(null==l?void 0:l.mode)||this.simulation_mode,l,u)):o=e.type.trial(this.DOM_target,e,u)),o&&"function"==typeof o.then||this.simulation_mode&&(!this.simulation_mode||!1!==(null==l?void 0:l.simulate))||u(),this.internal.call_immediate=!1}},{key:"evaluateTimelineVariables",value:function(e){for(var r=0,n=Object.keys(e);r<n.length;r++){var i=n[r];"object"===t(e[i])&&null!==e[i]&&void 0!==e[i].timelineVariablePlaceholder&&(e[i]=e[i].timelineVariableFunction()),"object"===t(e[i])&&null!==e[i]&&"timeline"!==i&&"timeline_variables"!==i&&this.evaluateTimelineVariables(e[i])}}},{key:"evaluateFunctionParameters",value:function(t){this.internal.call_immediate=!0;for(var r=0,n=Object.keys(t);r<n.length;r++){var i=n[r];"type"!==i&&(void 0!==A[i]&&A[i].type!==e.ParameterType.FUNCTION&&(t[i]=this.replaceFunctionsWithValues(t[i],null)),void 0!==t.type.info.parameters[i]&&t.type.info.parameters[i].type!==e.ParameterType.FUNCTION&&(t[i]=this.replaceFunctionsWithValues(t[i],t.type.info.parameters[i])))}this.internal.call_immediate=!1}},{key:"replaceFunctionsWithValues",value:function(r,n){if(null===r)return r;if(Array.isArray(r))for(var i=0;i<r.length;i++)r[i]=this.replaceFunctionsWithValues(r[i],n);else if("object"===t(r))if(null!==n&&n.nested)for(var a=0,o=Object.keys(r);a<o.length;a++){var s=o[a];"object"===t(n.nested[s])&&n.nested[s].type!==e.ParameterType.FUNCTION&&(r[s]=this.replaceFunctionsWithValues(r[s],n.nested[s]))}else for(var l=0,u=Object.keys(r);l<u.length;l++){var c=u[l];"type"!==c&&"timeline"!==c&&"timeline_variables"!==c&&(r[c]=this.replaceFunctionsWithValues(r[c],null))}else if("function"==typeof r)return r();return r}},{key:"setDefaultValues",value:function(t){var r=function(r){t.type.info.parameters[r].type===e.ParameterType.COMPLEX?(void 0===t[r]&&t.type.info.parameters[r].default&&(t[r]=t.type.info.parameters[r].default),!0===t.type.info.parameters[r].array&&Array.isArray(t[r])&&t[r].forEach((function(e,n){for(var i in t.type.info.parameters[r].nested)void 0!==t[r][n][i]&&null!==t[r][n][i]||(void 0===t.type.info.parameters[r].nested[i].default?console.error("You must specify a value for the ".concat(i," parameter (nested in the ").concat(r," parameter) in the ").concat(t.type.info.name," plugin.")):t[r][n][i]=t.type.info.parameters[r].nested[i].default)}))):void 0!==t[r]&&null!==t[r]||(void 0===t.type.info.parameters[r].default?console.error("You must specify a value for the ".concat(r," parameter in the ").concat(t.type.info.name," plugin.")):t[r]=t.type.info.parameters[r].default)};for(var n in t.type.info.parameters)r(n)}},{key:"checkExclusions",value:function(e){return v(this,void 0,void 0,regeneratorRuntime.mark((function t(){var r,n;return regeneratorRuntime.wrap((function(t){for(;;)switch(t.prev=t.next){case 0:if((e.min_width||e.min_height||e.audio)&&console.warn("The exclusions option in `initJsPsych()` is deprecated and will be removed in a future version. We recommend using the browser-check plugin instead. See https://www.jspsych.org/latest/plugins/browser-check/."),!e.min_width&&!e.min_height){t.next=12;break}if(r=e.min_width||0,n=e.min_height||0,!(window.innerWidth<r||window.innerHeight<n)){t.next=12;break}this.getDisplayElement().innerHTML="<p>Your browser window is too small to complete this experiment. Please maximize the size of your browser window. If your browser window is already maximized, you will not be able to complete this experiment.</p><p>The minimum width is "+r+"px. Your current width is "+window.innerWidth+"px.</p><p>The minimum height is "+n+"px. Your current height is "+window.innerHeight+"px.</p>";case 6:if(!(window.innerWidth<r||window.innerHeight<n)){t.next=11;break}return t.next=9,Q(100);case 9:t.next=6;break;case 11:this.getDisplayElement().innerHTML="";case 12:if(void 0===e.audio||!e.audio){t.next=16;break}if(window.hasOwnProperty("AudioContext")||window.hasOwnProperty("webkitAudioContext")){t.next=16;break}throw this.getDisplayElement().innerHTML="<p>Your browser does not support the WebAudio API, which means that you will not be able to complete the experiment.</p><p>Browsers that support the WebAudio API include Chrome, Firefox, Safari, and Edge.</p>",new Error;case 16:case"end":return t.stop()}}),t,this)})))}},{key:"drawProgressBar",value:function(e){document.querySelector(".jspsych-display-element").insertAdjacentHTML("afterbegin",'<div id="jspsych-progressbar-container"><span>'+e+'</span><div id="jspsych-progressbar-outer"><div id="jspsych-progressbar-inner"></div></div></div>')}},{key:"updateProgressBar",value:function(){this.setProgressBar(this.getProgress().percent_complete/100)}},{key:"setProgressBar",value:function(e){e=Math.max(Math.min(1,e),0),document.querySelector("#jspsych-progressbar-inner").style.width=100*e+"%",this.progress_bar_amount=e}},{key:"getProgressBarCompleted",value:function(){return this.progress_bar_amount}}]),n}();return"undefined"!=typeof window&&window.hasOwnProperty("webkitAudioContext")&&!window.hasOwnProperty("AudioContext")&&(window.AudioContext=webkitAudioContext),e.JsPsych=Z,e.initJsPsych=function(e){var t=new Z(e);return Object.defineProperties(t,Object.fromEntries(Object.entries({init:"`jsPsych.init()` was replaced by `initJsPsych()` in jsPsych v7.",ALL_KEYS:'jsPsych.ALL_KEYS was replaced by the "ALL_KEYS" string in jsPsych v7.',NO_KEYS:'jsPsych.NO_KEYS was replaced by the "NO_KEYS" string in jsPsych v7.',currentTimelineNodeID:"`currentTimelineNodeID()` was renamed to `getCurrentTimelineNodeID()` in jsPsych v7.",progress:"`progress()` was renamed to `getProgress()` in jsPsych v7.",startTime:"`startTime()` was renamed to `getStartTime()` in jsPsych v7.",totalTime:"`totalTime()` was renamed to `getTotalTime()` in jsPsych v7.",currentTrial:"`currentTrial()` was renamed to `getCurrentTrial()` in jsPsych v7.",initSettings:"`initSettings()` was renamed to `getInitSettings()` in jsPsych v7.",allTimelineVariables:"`allTimelineVariables()` was renamed to `getAllTimelineVariables()` in jsPsych v7."}).map((function(e){var t=d(e,2),r=t[0],n=t[1];return[r,{get:function(){throw new w(n)}}]})))),t},e.universalPluginParameters=A,Object.defineProperty(e,"__esModule",{value:!0}),e}({}),initJsPsych=jsPsychModule.initJsPsych;
+//# sourceMappingURL=index.browser.min.js.map
+
+</script>
+<script>
+var jsPsychHtmlButtonResponse=function(t){"use strict";function e(t,e){for(var n=0;n<e.length;n++){var s=e[n];s.enumerable=s.enumerable||!1,s.configurable=!0,"value"in s&&(s.writable=!0),Object.defineProperty(t,s.key,s)}}var n={name:"html-button-response",parameters:{stimulus:{type:t.ParameterType.HTML_STRING,pretty_name:"Stimulus",default:void 0},choices:{type:t.ParameterType.STRING,pretty_name:"Choices",default:void 0,array:!0},button_html:{type:t.ParameterType.HTML_STRING,pretty_name:"Button HTML",default:'<button class="jspsych-btn">%choice%</button>',array:!0},prompt:{type:t.ParameterType.HTML_STRING,pretty_name:"Prompt",default:null},stimulus_duration:{type:t.ParameterType.INT,pretty_name:"Stimulus duration",default:null},trial_duration:{type:t.ParameterType.INT,pretty_name:"Trial duration",default:null},margin_vertical:{type:t.ParameterType.STRING,pretty_name:"Margin vertical",default:"0px"},margin_horizontal:{type:t.ParameterType.STRING,pretty_name:"Margin horizontal",default:"8px"},response_ends_trial:{type:t.ParameterType.BOOL,pretty_name:"Response ends trial",default:!0}}},s=function(){function t(e){!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,t),this.jsPsych=e}var n,s,r;return n=t,(s=[{key:"trial",value:function(t,e){var n=this,s='<div id="jspsych-html-button-response-stimulus">'+e.stimulus+"</div>",r=[];if(Array.isArray(e.button_html))e.button_html.length==e.choices.length?r=e.button_html:console.error("Error in html-button-response plugin. The length of the button_html array does not equal the length of the choices array");else for(var a=0;a<e.choices.length;a++)r.push(e.button_html);for(s+='<div id="jspsych-html-button-response-btngroup">',a=0;a<e.choices.length;a++){var i=r[a].replace(/%choice%/g,e.choices[a]);s+='<div class="jspsych-html-button-response-button" style="display: inline-block; margin:'+e.margin_vertical+" "+e.margin_horizontal+'" id="jspsych-html-button-response-button-'+a+'" data-choice="'+a+'">'+i+"</div>"}s+="</div>",null!==e.prompt&&(s+=e.prompt),t.innerHTML=s;var l=performance.now();for(a=0;a<e.choices.length;a++)t.querySelector("#jspsych-html-button-response-button-"+a).addEventListener("click",(function(t){c(t.currentTarget.getAttribute("data-choice"))}));var o={rt:null,button:null},u=function(){n.jsPsych.pluginAPI.clearAllTimeouts();var s={rt:o.rt,stimulus:e.stimulus,response:o.button};t.innerHTML="",n.jsPsych.finishTrial(s)};function c(n){var s=performance.now(),r=Math.round(s-l);o.button=parseInt(n),o.rt=r,t.querySelector("#jspsych-html-button-response-stimulus").className+=" responded";for(var a=document.querySelectorAll(".jspsych-html-button-response-button button"),i=0;i<a.length;i++)a[i].setAttribute("disabled","disabled");e.response_ends_trial&&u()}null!==e.stimulus_duration&&this.jsPsych.pluginAPI.setTimeout((function(){t.querySelector("#jspsych-html-button-response-stimulus").style.visibility="hidden"}),e.stimulus_duration),null!==e.trial_duration&&this.jsPsych.pluginAPI.setTimeout(u,e.trial_duration)}},{key:"simulate",value:function(t,e,n,s){"data-only"==e&&(s(),this.simulate_data_only(t,n)),"visual"==e&&this.simulate_visual(t,n,s)}},{key:"create_simulation_data",value:function(t,e){var n={stimulus:t.stimulus,rt:this.jsPsych.randomization.sampleExGaussian(500,50,1/150,!0),response:this.jsPsych.randomization.randomInt(0,t.choices.length-1)},s=this.jsPsych.pluginAPI.mergeSimulationData(n,e);return this.jsPsych.pluginAPI.ensureSimulationDataConsistency(t,s),s}},{key:"simulate_data_only",value:function(t,e){var n=this.create_simulation_data(t,e);this.jsPsych.finishTrial(n)}},{key:"simulate_visual",value:function(t,e,n){var s=this.create_simulation_data(t,e),r=this.jsPsych.getDisplayElement();this.trial(r,t),n(),null!==s.rt&&this.jsPsych.pluginAPI.clickTarget(r.querySelector('div[data-choice="'.concat(s.response,'"] button')),s.rt)}}])&&e(n.prototype,s),r&&e(n,r),Object.defineProperty(n,"prototype",{writable:!1}),t}();return s.info=n,s}(jsPsychModule);
+//# sourceMappingURL=index.browser.min.js.map
+
+</script>
+<script>
+/* ── 0. 초기화 ── */
+const jsPsych = initJsPsych({
+  on_finish: function() { jsPsych.data.displayData('json'); }
+});
+
+const CONDITION = 'naive';
+const applicantsData = [
+  {
+    "id": "2y7Vf",
+    "name": "김O우",
+    "type": "Bad",
+    "will_repay": true,
+    "demographics": {
+      "age": "33세 (1990년생)",
+      "job": "정규직 | 고졸",
+      "income": "2,630,000 원",
+      "expense": "2,390,000 원",
+      "gender_loc": "Male | 경기",
+      "fin_asset": "1,000,000 원",
+      "car_asset": "0 원",
+      "total_asset": "1,000,000 원"
+    },
+    "debt_shin": {
+      "total": "7,244,720 원",
+      "balance": "6,564,878 원",
+      "monthly": "75,446 원",
+      "history": "96개월中9개월",
+      "reason": "생활비와 가게 운영으로 인한 부채가 발생하였습니다 또 투자비용 등 개인적으로 생활하는데 있어 오래전에 급여보다 발생한 지출금액이 커서 나중에는 감당하지 못하여서 이게 부채가 되었습니다"
+    },
+    "debt_add": {
+      "exist": "Y (총 1건)",
+      "balance": "7,000,000 원",
+      "monthly": "169,000 원",
+      "rate": "15.9 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "안녕하세요 저는 경기도 용인에 거주하고 있는 35세 김O우입니다 현재 마트킹 이라는 회사에서 상품관리로 일하고 있습니다 20대에 돈을 많이 벌고싶어 여러 가지 일도 하고 투자도 해보았지만 전부다 실패하고 통신업,식당, 같은 곳에서 일하며 지내다가 지금은 괜찮은 회사에 정착하여 일을하고있습니다 빚도 열심히 갚아가며 성실하게 생활하고 있고 앞으로 하나하나 배우며 성장하는 사람으로 될것입니다",
+      "need": "현재 이사를 계획하구 있습니다 . 이번에 기회가 되어서 햇살론이라는 대출을 이용하고 있습니다 보증금을 하기 위해 받았습니다 부족한 부분은 생활비에서 일부 제외시켜 이사를 갈 계획이었는데 마침 두나무넥스트드림에서 좋은 기회가 생겨서 지원하게 됐습니다 현재 생활하는 부분에서 조금 힘든 부분이 있어서 지원하게 되었구 기회가 되면 좋겟습니다",
+      "plan": "현재 지게차 자격증은 취득해서 열심히 배우고 있습니다 현재는 많이 부족하지만 성장할 수 있는 기회가 충분하기에 미래는 삶의 부족함없이 지낼수 있도록 열심히 하고있습니다"
+    },
+    "naive_summary": "신청인은 경기 거주 33세 남성으로 고졸 학력의 정규직 근로자이며, 마트킹에서 상품관리 업무를 하고 있습니다. 가구 월수익은 263만원, 월지출은 239만원으로 여유자금은 약 24만원 수준이며, 금융자산 100만원 외 차량은 없어 자산 총액도 100만원입니다. 부채는 과거 생활비, 가게 운영비, 투자 실패와 급여를 초과한 지출 누적으로 발생했으며, 신용회복위원회 채무 724만 4천원 중 96개월 상환계획에서 9개월을 납입해 잔액은 656만 5천원, 월 상환액은 7만 5천원입니다. 별도 추가대출 1건 700만원이 있으며 평균금리 15.9%, 월 상환액은 16만 9천원으로, 총 채무부담은 최소 1천356만 5천원 수준입니다. 현재 이사를 계획하며 보증금 마련을 위해 햇살론을 이용 중이고, 부족분은 생활비를 줄여 충당하려 했으나 현재 생활여건이 빠듯해 본 지원을 신청했습니다. 20대에 여러 일과 투자를 시도했으나 실패를 겪은 뒤 현재 직장에 정착해 성실히 상환을 이어가고 있습니다. 향후에는 취득한 지게차 자격증을 바탕으로 업무역량을 키워 소득과 생활 안정성을 높이겠다는 계획입니다.",
+    "comp_summary": "신청인은 경기 거주 33세 남성으로 고졸 학력의 정규직 상품관리 근로자이며, 가구 월수익 263만원으로 월지출 239만원을 감당해 실제 여력이 크지 않은 상황입니다. 금융자산과 총자산은 각 100만원에 그치는데, 신용회복위원회 채무 724만 4천원 중 656만 5천원을 남긴 채 96개월 중 9개월째 월 7만 5천원을 상환하고 있고, 별도로 연 15.9% 추가대출 700만원에 월 16만 9천원을 부담하고 있습니다. 부채는 과거 생활비, 가게 운영비, 투자 실패, 급여를 넘긴 지출이 누적되며 형성되었고, 이는 단순 소비가 아니라 생계 유지와 무리한 회복 시도가 뒤엉킨 결과로 보입니다. 20대의 시행착오 이후 통신업과 식당 일을 거쳐 현재 회사에 정착했고, 채무를 실제로 상환하며 생활을 유지해 온 점은 과장 없이 꾸준한 버팀의 기록입니다. 지금은 이사를 앞두고 보증금 마련을 위해 햇살론까지 활용해야 해, 부족분을 생활비에서 덜어내야 하는 압박이 현재의 어려움을 더 선명하게 보여줍니다. 그럼에도 지게차 자격증을 취득해 현장에서 배우며 소득 기반을 넓히려 하고 있어, 이번 지원은 단기 생활압박과 이사비 부담을 낮추고 상환 흐름을 무너뜨리지 않은 채 다음 단계로 이동할 수 있게 하는 현실적 전환점이 됩니다."
+  },
+  {
+    "id": "BWfvc",
+    "name": "인O근",
+    "type": "Bad",
+    "will_repay": false,
+    "demographics": {
+      "age": "32세 (1991년생)",
+      "job": "미취업 청년 | 고졸",
+      "income": "2,530,000 원",
+      "expense": "2,177,384 원",
+      "gender_loc": "Male | 서울",
+      "fin_asset": "816,620 원",
+      "car_asset": "0 원",
+      "total_asset": "816,620 원"
+    },
+    "debt_shin": {
+      "total": "33,340,851 원",
+      "balance": "30,916,739 원",
+      "monthly": "347,384 원",
+      "history": "96개월中7개월",
+      "reason": "퇴직 후 재취업이 늦어지며 대출총액이 늘어났고 최종적으로 원리금 납부가 힘들어짐"
+    },
+    "debt_add": {
+      "exist": "N (총 0건)",
+      "balance": "0 원",
+      "monthly": "0 원",
+      "rate": "0.0 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "목돈이 필요할때 신용회복위원회에서 24년 1월 9일에 이 사업에 대한 알림톡이 와서\n내용체크 후 사업대상이 될거같아서 참여신청을 하게 되었습니다.",
+      "need": "현재 직업훈련을 받고있으며 2/4에 전산세무2급, 전산회계 1급과 2/6에 TAT 2급 FAT 1급을 취득하여 올해 상반기 내에 취업할 예정으로 있는 상태이지만 현재 살고있는 주거지에서 나와 혼자 주거할 주거지로 이사할 예정입니다. 때문에 목돈이 들어갈 확률이 높아 생계비 대출을 지원하게 되었습니다. 250만원을 받게된다면 200만원은 주거로 50만원은 생활비 예비금으로 용도를 생각하고 있습니다.",
+      "plan": "취업목표는 세무회계사무실의 사무직으로 한 곳에 오랜동안 자원으로 재직하여 사무장급으로 진급을 하고싶습니다. 안정적인 직장과 생활로 먼 미래를 계획하고 싶습니다."
+    },
+    "naive_summary": "신청인은 서울 거주 32세 남성의 미취업 청년으로 고졸이며, 가구월수익은 253만원, 월지출은 217만 7천원, 중위소득 130% 이하이고 금융자산은 81만 7천원으로 자산 총액도 동일하며 차량은 없습니다. 퇴직 후 재취업이 지연되면서 대출이 누적돼 원리금 상환이 어려워졌고, 현재 신용회복위원회 채무 3,334만 1천원 중 3,091만 7천원이 남아 있으며 96개월 중 7개월째, 월 34만 7천원을 상환 중입니다. 추가대출은 없고 별도 대출잔액·월상환액도 없어 부채는 신복위 채무에 집중돼 있습니다. 신청인은 2024년 1월 9일 신복위 알림톡을 통해 본 사업을 확인하고 지원대상에 해당할 가능성을 보고 신청했습니다. 현재 직업훈련 중이며 2월 4일 전산세무 2급·전산회계 1급, 2월 6일 TAT 2급·FAT 1급을 취득해 상반기 내 세무회계사무실 사무직 취업을 목표로 합니다. 현 주거지에서 나와 독립 거주지로 이사할 예정이라 목돈 수요가 커 생계비 대출을 신청했으며, 250만원 지원 시 200만원은 주거비, 50만원은 생활비 예비금으로 사용할 계획입니다. 장기적으로는 한 직장에 오래 근무해 사무장급으로 성장하며 안정적 직장과 생활 기반을 마련하고자 합니다.",
+    "comp_summary": "신청인은 서울 거주 32세 미취업 청년으로, 고졸 학력에 금융자산은 81만 7천원뿐이고 차량도 없어 사실상 완충자산 없이 생활하고 있습니다. 퇴직 뒤 재취업이 늦어지며 부채가 불어나 신용회복위원회 채무조정 총부채 3천334만 1천원 중 3천91만 7천원을 안고, 96개월 중 7개월째 매달 34만 7천원을 상환하고 있습니다. 가구 월수익 253만원에서 월지출 217만 7천원과 상환액이 겹치는 구조는 중위소득 130% 이하 청년에게 독립 준비와 구직을 동시에 버티게 하는 무거운 부담입니다. 그럼에도 신청인은 직업훈련을 이어가며 전산세무 2급, 전산회계 1급, TAT 2급, FAT 1급 취득을 통해 상반기 취업을 구체적으로 준비하고 있습니다. 현재 지원 필요는 소비 확대가 아니라 기존 거주지에서 나와 홀로 거주할 주거 이전에 필요한 목돈 마련에 있으며, 250만원 중 200만원은 주거비, 50만원은 생활비 예비금으로 계획하고 있습니다. 이 지원은 채무를 안은 채 취업 직전 단계에서 흔들리기 쉬운 생활기반을 잠시 붙들어 주는 안전판이자, 세무회계사무실 장기근속과 사무장급 성장이라는 계획을 현실로 옮길 첫 호흡이 될 수 있습니다."
+  },
+  {
+    "id": "VmhPv",
+    "name": "김O아",
+    "type": "HiddenGem",
+    "will_repay": true,
+    "demographics": {
+      "age": "38세 (1985년생)",
+      "job": "미취업 청년 | 초/대학졸업",
+      "income": "1,900,000 원",
+      "expense": "1,680,000 원",
+      "gender_loc": "Female | 서울",
+      "fin_asset": "2,500,000 원",
+      "car_asset": "1,900,000 원",
+      "total_asset": "4,400,000 원"
+    },
+    "debt_shin": {
+      "total": "24,980,245 원",
+      "balance": "19,181,968 원",
+      "monthly": "264,981 원",
+      "history": "120개월中34개월",
+      "reason": "어머님 보이스피싱 당하셔서 빚 발생, 소득인인 본인이 대환대출로 갚아드리면서 내 명의로 빚 이동됨. 추후 어머님 희귀난치성 질환 발생 및 수술로 입원 하셔서 의료비까지 발생되어 추가대출 받음. 동생은 지적장애인이라 보호자역활을 어머님대신 제가 해야 했고 입원하신 어머님은 돌볼 사람이 없어 간병인 이용. 간병비까지 발생됨. (보이스피싱당하셔서 빚 대출받아 상환해서 대출금발생, 생계비 및 어머님 병원비, 간병비로 채무 발생됨) 추 후 어머님과 동생을 돌봐야해서 다니던 직장 최사 후 간병생활 및 동생 보호자역활 함. 소득이 없어 대출 상환 어려움 발생되어 채무조정 받고 기초수급자 되서 수급비로 대출금 연체 없이 상환 중."
+    },
+    "debt_add": {
+      "exist": "Y (총 1건)",
+      "balance": "3,000,000 원",
+      "monthly": "80,000 원",
+      "rate": "3.0 %",
+      "reason": "어머님 입원하셔서 의료비 및 간병비 발생되어 대출 받음."
+    },
+    "story": {
+      "intro": "안녕하세요. 희귀난치성 질환자인 어머님이 병원생활을 자주, 그리고 오래 하셔서 의료비 및 간병비가 많이 발생되어 지원받고 싶어 참여하게 되었습니다. 비록 기초수급자로서 간병생활을 하고 있으나 수급비로 절약 하면서 채무가 발생시 연체없이 상환하고 있습니다. 희망을 가지고 열심히 살아갈수 있도록 좋은 기회길 간절히 바래봅니다.",
+      "need": "저의 가족은 어머님, 저, 남동생 이렇게 세식구 입니다. 아픈손가락 제 남동생이 지적장애인 이어서 어머님 편찮으시기 전엔 어머님께서 주부로 남동생을 케어하셨고 저는 직장생활을 하며 평범하고 알뜰히 살아 갔었습니다. 어머님이 편찮으셔서 응급실 실려가시는 경우가 자주 발생되었고, 추후 허리에도 문제가 생겨 긴급하게 허리수술도 하시면서 동생을 돌볼사람이 없어다니던 직장을 관두고 동생을 돌보게 되었습니다. 어머님은 간병인을 이용하게 되어 간병비까지 발생되어 모아돈 돈과 대출을 여러번 받아 상환하면서 생활 했었는데요. 이번에도 어머님이 많이 편찮으셔서 응급실에 실려 가셨고 긴급하게 입원하게 되어 간병비가 발생 되었습니다. 어머님 입원시 저는 장애인인 동생을 돌봐야 하고 입원하신 어머님은 돌볼 사람이 없어 간병인을 이용하다 보니 간병비가 발생되고 있습니다. 나라에서 간병비는 지원 받을수가 없어서 정부에서 아무런 도움을 받지 못해 지원하게 되었습니다.",
+      "plan": "언젠가는 우리 가족에게도 좋은 날이 올거라고, 그리고 어머님이 호전이 되길 희망하며, 언젠가는 사회생활에 복귀해서 베풀수 있는날이 올거라고 믿고 있습니다. 물론 빚이 생기겠지만 좋은 기회를 주신다면 저에게는 큰 한줄기 빛이 생길거 같아요. 어려운 상황일 때 도움을 받는다면 열심히 살아갈수 있는 큰 원동력이 될거 같아요. 희망을 가지고 긍정적으로 성실하게 살고자 지금보다 더 노력 하려 합니다. 열심히 살아갈수 있도록 좋은 기회를 주시길 간절히 바래봅니다."
+    },
+    "naive_summary": "신청인은 서울 거주 38세 여성 미취업 청년으로, 초/대학졸업 학력이며 중위소득 100% 이하, 가구 월수익 190만원·월지출 168만원의 기초수급 생활을 이어가고 있습니다. 금융자산은 250만원, 차량 190만원으로 자산 총액은 440만원에 그칩니다. 채무는 신용회복위원회 총부채 2,498만 245원 중 1,918만 1,968원이 남아 있고, 120개월 중 34개월째 월 26만 4,981원씩 연체 없이 상환 중입니다. 별도 추가대출도 1건 300만원이 있으며 금리 3.0%, 월상환액은 8만원입니다. 부채는 모친의 보이스피싱 피해를 신청인 명의 대환대출로 떠안은 데서 시작됐고, 이후 모친의 희귀난치성 질환·수술·입원에 따른 의료비와 간병비, 지적장애 남동생 보호 부담이 겹치며 확대됐습니다. 신청인은 가족 돌봄을 위해 퇴사해 소득이 끊겼고, 모친 입원 시에는 동생을 돌봐야 해 간병인 비용까지 발생해 생계와 상환 압박이 지속되는 상황입니다. 지원금은 현재 발생 중인 모친 의료비와 간병비 부담 완화에 필요하며, 향후 모친 건강 호전과 사회복귀를 통해 성실히 자립하고 채무를 감당해 나가겠다는 계획입니다.",
+    "comp_summary": "서울 거주 38세 미취업 청년인 신청인은 중위소득 100% 이하 가구로, 월수입 190만원 중 월지출 168만원을 감당하며 금융자산 250만원·차량 190만원, 총자산 440만원에 비해 채무 부담이 훨씬 큽니다. 부채의 출발은 어머니의 보이스피싱 피해를 본인 명의 대환으로 떠안은 데 있었고, 이후 희귀난치성 질환과 수술·반복 입원으로 의료비와 간병비가 더해지며 추가대출 300만원까지 발생했습니다. 신용회복위원회 채무는 총 2,498만원 중 잔액 1,918만원이 남아 있고, 120개월 중 34개월을 납입하며 월 26만 5천원을 상환 중이며, 추가대출도 월 8만원씩 갚고 있습니다. 지적장애가 있는 동생의 보호를 맡아야 했고 입원한 어머니를 돌볼 사람도 없어 결국 직장을 그만두며 소득 기반이 약화된 점은, 이 사례의 고통이 단순한 생활고가 아니라 가족돌봄이 빚으로 전환된 구조임을 보여줍니다. 그럼에도 신청인은 기초수급 상태에서 수급비를 아껴 연체 없이 상환을 이어왔고, 현재도 어머니 입원 시 동생 돌봄과 간병 공백을 동시에 메우고 있습니다. 이번 지원은 제도 밖에 놓인 간병비 압박을 완화해 급한 지출을 막고, 채무 상환의 균형을 지키며 가족돌봄 붕괴를 늦추는 현실적 완충장치가 될 수 있습니다. 더 나아가 신청인이 어머니 상태 호전 이후 사회복귀를 준비할 최소한의 호흡을 확보하게 한다는 점에서, 단기 생계 보전을 넘어 다시 삶의 리듬을 회복하는 전환점이 될 가능성이 있습니다."
+  },
+  {
+    "id": "BwdGE",
+    "name": "문O현",
+    "type": "HiddenGem",
+    "will_repay": false,
+    "demographics": {
+      "age": "32세 (1991년생)",
+      "job": "미취업 청년 | 대학 졸업",
+      "income": "4,000,000 원",
+      "expense": "2,500,000 원",
+      "gender_loc": "Male | 서울",
+      "fin_asset": "200,000 원",
+      "car_asset": "0 원",
+      "total_asset": "200,000 원"
+    },
+    "debt_shin": {
+      "total": "7,464,928 원",
+      "balance": "6,367,835 원",
+      "monthly": "84,351 원",
+      "history": "126개월中29개월",
+      "reason": "미기재"
+    },
+    "debt_add": {
+      "exist": "Y (총 1건)",
+      "balance": "22,000,000 원",
+      "monthly": "45,000 원",
+      "rate": "1.7 %",
+      "reason": "대학교에서 학자금 대출 및 생활비 대출을 받아서 2년정도 컴퓨터 소프트웨어 학과에 진학하면서 발생한 비용입니다."
+    },
+    "story": {
+      "intro": "안녕하세요 두나무 넥스트 드림 사업에 지원하게된 문O현입니다. 저의 모토는 새로운 것을 배우려는 자세와 성실성입니다. 항상 새로운 것을 배우기 위해 컴퓨터 소프트웨어공부, 공인노무사 공부를 오랫동안 공부하면서 개발에 대한 지식, 및 노동법, 인사 전반에 대한 지식을 습득했습니다. 그리고 이러한 지식을 기반으로 이번에 공무원시험에 지원해 2023년 서울시 공무원에 최종 합격했습니다. 저에게는 어려운 시기가 있었습니다. 배우기 위해 노력하던 중 생활비 및 학비를 스스로 벌어야 했기에 그 과정에서 어려움을 겪었고 신용회복위원회에 채무조정을 받았습니다. 하지만 신용회복위원회라는 디딤발이 있었고 이러한 디딤받을 딛고 앞으로 나아갔습니다. 저는 7월에 임용되기 마지막 3달동안 쿠팡에서 사업자로서 참여해보고 싶습니다. 그리고 이러한 경험을 바탕으로 공직생활을하면서 만나게 될 사업주분들의 마음을 이해하고 공감하며 정책을 집행하는 공무원 생활을 해보고자 두나무 넥스트 사업에 참여하고 싶습니다",
+      "need": "생계비 대출금 사용용도는 우선 생계 용도로는 학자금 대출 및 신용회복위원회 채무 변제에 활용 및 식비 월 30만원, 핸드폰비 3만5천원에 사용하고자 합니다. 의료비는 현재 나가고 있는 실손보험 8만원을 납부하는데 사용하겠습니다. 주거 용도로는 현재 부모님 집에서 거주하고 있는 상황이라서 추가적인 비용부담은 없을 것 같습니다. 저는 생계, 의료 용도외 해당 자금을 쿠팡 셀러로서 활동하는데 사용해보고 싶습니다. 쿠팡에는 많은 물건들이 들어와있는 상황입니다. 그 중 제가 판매할 물품은 서양 양서입니다. 서양 양서를 아마존에서 직접 구매하고 이를 쿠팡사이트에서 셀러로서 직접 판매할 예정입니다. 쿠팡 셀러로 활동하면서 사업에서 갖춰야할 사업신고방법, 쿠팡 사이트에서 사업 교육을 받고, 가격표작업, 물품 등록, 알고리즘 배너에 노출을 잘 시키기 위한 노하우등 사업을 직접 진행해보고 싶습니다. 쿠팡셀러의 경우 초기 비용을 100~150만원 정도 잡고 3개월 정도 진행해서 한 달 순이익 200만원 정도를 달성해보고 싶습니다. 그리고 창업 비용, 생계 비용, 의료 비용 외 나머지 비용은 사업 과정에서 예상치 못한 부대 비용에 사용하고 그리고 나서도 남은 나머지 금액을 양서를 구매하고 판매하는 과정에서 필요한 영어지식을 습득하는 비용으로 사용하고자 합니다. 양서를 판매하기 위해 필요한 영어지식을 사업을 진행하는 도중에 계속 공부하면서 효율적으로 사업을 운영하는데 사용하겠습니다.",
+      "plan": "두나무 넥스트 사업 종료 이후 사업주의 마음을 이해하고 이를 바탕으로 정책을 집행하는 공무원으로 성장하고 싶습니다. 저의 목표는 공익과 사익을 아우르는 전문가로 활동하는게 궁극적인 목표입니다. 개인적으로 공직 생활을 하다가 휴직계를 내고 대학원에 진학 후 전문 지식을 쌓아서 공직 생활에 응용하면서 실무지식을 쌓은 후에 공직 생활 중간에 나와서 개인 사업을 진행해보고 싶습니다. 또 개인 사업을 하다가 개인 사업에서 얻은 지식을 바탕으로 민간 경력직에 응시해서 정책을 집행하는 단계에서 벗어나 정책을 입안하는 공직자로서 활동해볼 수 있다고 생각합니다. 신용회복위원회는 저에게 있어 한 줄 기 빛과 같았습니다. 만약 신용회복위원회에 도움이 없었다면 저는 이 자리에서 이글을 쓰지 못하고 빚에 굴레에 갇혀서 지금 중간 목표에 도달하지 못했을 거라고 생각합니다. 제가 두나무 넥스트 사업에 지원한 이유 또한 마찬가지입니다. 사업 경험을 통해 제가 경험해보지 못한 새로운 세상을 경험해 볼 수 있다는 생각에 두나무 넥스트 사업 또한 한줄기 빛처럼 작용할 수 있다고 생각합니다. 지금까지 염치없지만 저의 부족한 자기소개 필요성 및 향후계획에 대해 읽어주셔서 정말 감사드립니다."
+    },
+    "naive_summary": "신청인은 서울 거주 32세 남성의 미취업 청년으로 대학 졸업자이며 중위소득 130% 이하, 금융자산·총자산은 각 20만원, 차량은 없습니다. 가구 월수익은 400만원, 월지출은 250만원으로 잉여는 150만원 수준이나, 본인 채무 부담이 지속됩니다. 부채는 신용회복위원회 총 746만 4천928원 중 잔액 636만 7천835원이며 126개월 중 29개월을 납입했고 월 상환액은 8만 4천351원입니다. 별도 추가대출 1건은 총 2천200만원, 잔액 1천878만 1천182원, 가중평균금리 1.7%, 월 상환액 4만 5천원입니다. 채무는 대학 재학 중 컴퓨터 소프트웨어 학과 학자금·생활비 대출로 발생했고, 생계 곤란으로 채무조정에 이르렀으나 이후 2023년 서울시 공무원에 최종 합격했습니다. 지원금은 학자금 및 채무 변제, 식비 월 30만원, 휴대폰비 3만 5천원, 실손보험료 월 8만원 등 생계·의료비와 쿠팡 셀러 초기비용 100만~150만원에 사용할 계획입니다. 향후 7월 임용 전 3개월간 아마존 양서를 들여와 쿠팡에서 판매하며 월 순이익 200만원을 목표로 사업 실무와 영어역량을 쌓고, 장기적으로는 공직·대학원·개인사업·정책입안 역량을 연결해 사업주의 현실을 이해하는 공직자로 성장하고자 합니다.",
+    "comp_summary": "32세 서울 거주 미취업 청년으로, 대학 졸업 후 학자금·생활비 대출로 시작된 부채를 지금까지 짊어지고 있습니다. 금융자산은 20만원뿐인데 신용회복위 채무 636만 8천원(126개월 중 29개월 납입, 월 8만 4천원)과 추가대출 1,878만 1천원, 총부채 약 2,515만원이 남아 출발선 자체가 무겁습니다. 가구 월수익 400만원, 지출 250만원 구조이나 본인은 부모님 집에 거주하며 식비 30만원, 통신비 3만 5천원, 실손보험 8만원 등 최소 비용과 채무 상환을 버티는 상황입니다. 그럼에도 컴퓨터 소프트웨어와 노동·인사 분야를 꾸준히 공부해 2023년 서울시 공무원 시험에 최종 합격하며 삶을 다시 세우는 노력을 보여주었습니다. 신청인은 임용 전 3개월 동안 쿠팡 셀러로 서양 양서를 판매하며 사업 신고, 상품 등록, 노출 운영, 영어 역량까지 현장에서 익혀 보려 합니다. 이 지원은 단순 생계 보전이 아니라 학자금·채무 상환의 압박을 잠시 완화하고, 공직 입문 전 실무형 사업 경험을 확보하게 해 향후 사업주를 이해하는 공직자이자 민간과 공공을 잇는 사람으로 성장할 현실적 발판이 됩니다."
+  },
+  {
+    "id": "Bi84v",
+    "name": "최O일",
+    "type": "HiddenGem",
+    "will_repay": false,
+    "demographics": {
+      "age": "34세 (1989년생)",
+      "job": "미취업 청년 | 고졸",
+      "income": "1,000,000 원",
+      "expense": "570,614 원",
+      "gender_loc": "Male | 경기",
+      "fin_asset": "1,132,551 원",
+      "car_asset": "0 원",
+      "total_asset": "1,132,551 원"
+    },
+    "debt_shin": {
+      "total": "24,676,778 원",
+      "balance": "22,613,733 원",
+      "monthly": "350,364 원",
+      "history": "111개월中41개월",
+      "reason": "당시 생활 자금이 급하게 필요하여 농협 은행 및 카드 대출을 받았으나 계속해서 취업이 안되고 소득이 없어 경제적으로 도저히 감당하기 힘들어 신용 회복 위원회에 워크 아웃 신청하였습니다"
+    },
+    "debt_add": {
+      "exist": "N (총 0건)",
+      "balance": "0 원",
+      "monthly": "0 원",
+      "rate": "0.0 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "저는 경기도 군포에 거주중인 34세 남성입니다 몇 년전 생활금이 급하게 필요해 사회초년생일 큰액수를 대출했습니다 이 후 취업이 되지않고 대출금은 계속 미납되어 결국 감당하지 못하고 신용회복이원회에 워크아웃을 신청하여 현재도 꾸준히 변제중입니다 코로나 이후에도 변변한 직장을 구하지못해 일일 아르바이트나 일용직 현장일로 겨우겨우 대출금을 변제하고 먹고자고 최소한의 생활만 이어가고있습니다",
+      "need": "생활비(주거,식비,통신요금 등)로 사용할 목적입니다 대출을 받지 못하게된다면 현재 많이 힘든 상황입니다",
+      "plan": "대출금을 받게된다면 주거비와 최소한의 생활자금으로 절약하면서 국가에서 지원하는 자격증을 취득하여 오래 근무할 수 있는 직장에 취업할 것입니다"
+    },
+    "naive_summary": "신청인은 경기 군포 거주 34세 남성으로, 고졸의 미취업 청년이며 중위소득 100% 이하 가구에 속합니다. 금융자산은 113만 3천원, 차량 포함 자산 총액도 113만 3천원에 불과하고 추가대출은 없습니다. 과거 급한 생활자금 마련을 위해 농협은행 및 카드대출을 받았으나 취업 실패와 무소득이 이어져 상환이 불가능해졌고, 결국 신용회복위원회 워크아웃을 신청했습니다. 워크아웃 총부채는 2,467만 7천원, 잔액은 2,261만 4천원이며 111개월 중 41개월을 납입했고 월 상환액은 35만원입니다. 현재 가구 월수익은 100만원, 월지출은 57만 1천원으로 일일 아르바이트와 일용직으로 생계와 변제를 겨우 이어가고 있습니다. 코로나 이후에도 안정적 일자리를 구하지 못해 주거비·식비·통신요금 등 기본 생활비가 부족한 상황이어서 본 지원금은 생계 유지 목적이 분명합니다. 신청인은 지원 시 주거비와 최소 생활자금으로 우선 버티면서 지출을 절약하고, 국가 지원 자격증을 취득해 장기근속 가능한 직장에 취업할 계획입니다.",
+    "comp_summary": "신청인은 경기 군포에 거주하는 34세 미취업 청년으로, 고졸 학력에서 사회초년생 시기 급한 생활자금 마련을 위해 받은 은행·카드 대출이 장기 실직과 코로나 이후 고용 악화로 상환 불능에 이르러 신용회복위원회 워크아웃을 진행 중입니다. 총부채는 2천467만 7천원, 잔액은 2천261만 3천원이며 111개월 중 41개월을 납입했음에도 월 상환액 35만원이 계속 남아 있습니다. 금융자산과 총자산은 113만 3천원, 차량은 없고 가구 월수익은 100만원에 그칩니다. 가구 월지출은 57만 1천원으로 크지 않지만, 남는 금액만으로는 상환과 주거·식비·통신비를 함께 감당하기 어려운 구조입니다. 신청인은 변변한 상용직을 구하지 못한 상황에서도 일일 아르바이트와 일용직 현장일로 최소한의 생계를 잇고 변제를 이어왔습니다. 이는 부채가 소비 확장이 아니라 생존을 위한 급전과 실직의 누적에서 비롯되었음을 보여줍니다. 이번 지원은 추가 차입 없이 주거비와 필수 생활비를 버티게 하고, 국가 지원 자격증 취득과 장기근속 가능한 취업 준비로 연결되는 현실적인 완충지대가 될 수 있습니다."
+  },
+  {
+    "id": "jvq5e",
+    "name": "이O수",
+    "type": "Middle",
+    "will_repay": true,
+    "demographics": {
+      "age": "33세 (1990년생)",
+      "job": "프리랜서 | 고졸",
+      "income": "2,000,000 원",
+      "expense": "1,564,390 원",
+      "gender_loc": "Male | 경기",
+      "fin_asset": "2,000,000 원",
+      "car_asset": "0 원",
+      "total_asset": "2,000,000 원"
+    },
+    "debt_shin": {
+      "total": "15,685,144 원",
+      "balance": "19,688,673 원",
+      "monthly": "163,390 원",
+      "history": "111개월中41개월",
+      "reason": "코로나로 인하여 직장을 그만두게 되었고 그사이 교통사고로 인하여 다치게되며 일을 한동안 하지못하고 아파트 청약에 되어서 입주하게 되었는데 보증금가 월세가 적지않은 금액으로 미납이 발생하여 체무가 발생하게되었고 또한 정식으로 키워주신 조부모님께서 별세하게 되어 어려움을 겪고 힘든 시기가 있었습니다 이후 개인 채무조정으로 성실상환 중이며 투잡을 하며 성식하게 납부중입니다"
+    },
+    "debt_add": {
+      "exist": "N (총 0건)",
+      "balance": "0 원",
+      "monthly": "0 원",
+      "rate": "0.0 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "개인 워크아웃 이용하며 성실상환 도중 이러한 제도가 있는걸 알림으로 받게 되었고 마침 제게 필요하고 너무 좋은 제도라고 생각하여 신청하게 되었습니다",
+      "need": "사용 용도는 현재 청약 아파트 거주중이며 월세와 관리비가 적지 않은 금액이라 3~4개월 연체중에 있어서 좋은 제도를 발견하고 그곳에 이용하려고 신청합니다 현재 개인 워크아웃 이용하여 성실상환으로 여러가지로 좋은 이점을 보고있는데 신용점수도 상승중입니다 추후 신용관리와 앞으로 신용정보 쪽으로 컨설팅을 받고싶네요",
+      "plan": "현재 목표는 청약 아파트에 입주하고 3년정도 시간이 지난 상태라 만기까지 거주하고 이후 분양 받을 목표로 전진중입니다 좋은 기회로 청약 아파트에 거주하게 되었으며 미납으로 조금 어려움을 겪고 있긴하지만 투잡으로 열심히 채무 상환과 생계를 유지하고 있습니다 순간에 어려움으로 무너지지 않고 열심히 이겨내려고 하고있으며 이러한 제도로 큰 도움을 받으며 힘낼수있는 기회가 될거라고 생각합니다"
+    },
+    "naive_summary": "신청인은 경기 거주 33세 남성으로 고졸이며 프리랜서 배달업에 종사하고, 중위소득 150% 이하 가구로 월수익 200만원, 월지출 156만 4천원, 금융자산 및 총자산은 각 200만원입니다. 코로나로 실직한 뒤 교통사고로 장기간 일을 못했고, 청약 아파트 입주 후 보증금·월세 부담과 미납, 조부모 별세가 겹치며 채무가 발생했습니다. 현재 신용회복위원회 개인워크아웃으로 총부채금액 1천568만 5천원, 잔액 1천968만 9천원, 월상환액 16만 3천원 조건에서 111개월 중 41개월을 성실 상환 중입니다. 추가대출은 없고 추가대출 잔액·총부채·월상환액은 모두 0원입니다. 다만 현재 청약 아파트의 월세와 관리비가 부담돼 3~4개월 연체 상태로, 이번 지원금은 해당 주거비 미납 해소에 사용할 계획입니다. 투잡으로 생계와 상환을 병행하며 신용점수도 상승 중이고, 향후 만기까지 거주 후 분양 전환을 목표로 하며 신용관리·신용정보 컨설팅도 희망합니다.",
+    "comp_summary": "신청인은 경기 거주 33세 남성 프리랜서 배달노동자로, 고졸 학력에 가구 월수익 200만원·월지출 156만 4천원, 금융자산 200만원뿐인 상태에서 중위소득 150% 이하의 빠듯한 생계를 이어가고 있습니다. 코로나로 실직한 뒤 교통사고로 한동안 일하지 못했고, 청약 아파트 입주 과정에서 보증금·월세 부담이 겹쳐 미납이 쌓였으며, 정식으로 키워준 조부모의 별세까지 겹치며 부채가 삶의 공백과 상실 위에 형성됐습니다. 현재 신용회복위원회 개인워크아웃으로 총 1천568만 5천원 채무를 조정받아 111개월 중 41개월을 성실 납입했고, 월 상환액 16만 3천원을 감당하며 잔여 채무 1천968만 8천원을 안고 있습니다. 추가대출 없이 버티고 있으나 청약 아파트 월세와 관리비가 부담돼 3~4개월 연체가 발생한 점은, 주거를 지키는 일이 곧 생계 방어가 된 현실을 보여줍니다. 그럼에도 신청인은 배달과 투잡으로 수입을 메우며 채무조정 이행을 이어가고 있고, 신용점수도 상승 중이어서 단순한 버팀을 넘어 회복의 흐름을 만들어가고 있습니다. 이번 지원은 밀린 주거비를 정리해 현재 거주를 안정시키고, 어렵게 이어온 성실상환과 신용회복의 궤도를 지키게 하는 현실적 완충장치가 됩니다. 나아가 만기 거주 후 분양이라는 계획을 무너뜨리지 않고, 단기 연체의 위기를 장기 자립의 발판으로 바꾸는 계기가 될 수 있습니다."
+  },
+  {
+    "id": "i5dYN",
+    "name": "김O욱",
+    "type": "Middle",
+    "will_repay": false,
+    "demographics": {
+      "age": "34세 (1989년생)",
+      "job": "정규직 | 고졸",
+      "income": "2,600,000 원",
+      "expense": "1,299,473 원",
+      "gender_loc": "Male | 경기",
+      "fin_asset": "200,000 원",
+      "car_asset": "15,000,000 원",
+      "total_asset": "15,200,000 원"
+    },
+    "debt_shin": {
+      "total": "8,992,613 원",
+      "balance": "7,772,552 원",
+      "monthly": "96,655 원",
+      "history": "96개월中11개월",
+      "reason": "어릴 적 집 월세를 받기 위해 대출을 받았었는데 기존 대출금에 더 낮은 금리로 이동시켜준다는말에 계속 대출이 발생 되었고 빛이 계속 늘어나는 결과가 되었습니다. 결국에느 빚에 허둥거리기 시작했고 결국 개인회생을 하였지만 끝내 채우지 못하고 도중해지를 당했고, 시간이 지난 후 개인신용회복으로 매월 미납금없이 성실히 상환하며 지내고있습니다!"
+    },
+    "debt_add": {
+      "exist": "Y (총 3건)",
+      "balance": "22,100,000 원",
+      "monthly": "569,473 원",
+      "rate": "18.0 %",
+      "reason": "갑자스러운 어깨 골절 및 치과치료 등 고정지출금액에서 예상치못하는 금액이 많이 나가서 소액대출을 받게 되었고, 출근하는곳이 2분거리에서 대중교통 1시간30분 거리로 늘어나 차를 구매하게 되었습니다."
+    },
+    "story": {
+      "intro": "안녕하세요, 89년생 직장인 김O욱입니다. 저는 현재 피에스앤마켓팅에서 정규직으로 근무하고있으며, 아직 미혼입니다. 저는 어릴적부터 집이 가난하여 독립하며 정말 한달살이 인생을 오랫동안 살아왔습니다. 그러나 이제는 바뀌고 싶습니다. 한달인생이 아닌 매월 월급을 받으며 지나가는 월급이 아닌 간직된 월급으로 보내고싶습니다. 매월 부채를 상환하며 남은 금액으로 버티고 다음달이 되면 반복적인 생활이 계속되는데 이번에 서민금융지원센터에서 금융솔루션을 받기 시작하며 변화를 주고 싶었습니다. 그러던 중 신용회복위원회에서 온 두나무 넥스트 드림에서 하는 사업을 알게되었고 제 변화를 위해 생계비대출지원 사업이 필요하겠다고 생각하여 참가하게 되었습니다.",
+      "need": "생계비 대출을 지원 받게되면 부채상환을 먼저 하고싶습니다. 첫 번째는 신용회복위원회에 대출받은 금액을 정리하고 싶습니다. 두 번째는 개인신용회복에 있는 부채들을 갚아서 신용도를 올리고 싶습니다.",
+      "plan": "저는 개인 워크아웃 중이므로 96회차 중 11회차를 납부하고 있지만 96회차가 마무리 될 때까지 납부를 하면은 신용회복이 많이 늦어지는걸 알고 있어서 늦으면 2025년도 안에 빠르면 2024년안에 부채를 상환할 계획을 가지고 있습니다. 추후에 완납을 하게되면 신용도를 먼저 상향시켜가며, 전세자금도 모아서 꼭 월세에서 벗어나 전세로 이사가고 싶습니다. 그러면서 제 재산을 늘리고 싶습니다."
+    },
+    "naive_summary": "신청인은 경기 거주 34세 남성으로 고졸, 정규직 영업직에 종사하며 가구월수익 260만원, 월지출 129만 9천원, 금융자산 20만원, 차량 1천500만원을 포함한 자산 총액 1천520만원 수준입니다. 부채는 신용회복위원회 총부채 899만 3천원 중 잔액 777만 3천원을 96개월 중 11개월째 월 9만 7천원씩 성실 상환 중이며, 별도 추가대출 3건의 총부채는 2천210만원, 잔액은 2천40만 4천원, 가중평균금리 18.01%, 월상환액은 56만 9천원입니다. 어린 시절 월세 수입을 위한 대출이 저금리 전환 권유 과정에서 반복 차입으로 확대되며 채무가 누증됐고, 이후 개인회생이 도중해지된 뒤 현재는 개인신용회복으로 미납 없이 상환 중입니다. 추가대출은 어깨 골절, 치과치료 등 예상치 못한 의료비와 직장 이동으로 통근시간이 2분에서 1시간 30분으로 늘어나 차량을 구매하면서 발생했습니다. 월소득 대비 상환부담이 큰 구조에서 신청인은 생계비 지원을 통해 우선 신용회복위원회 채무와 개인신용회복 외 부채를 정리해 신용도를 높이려는 목적이 분명합니다. 향후 2024년 또는 늦어도 2025년 안에 부채를 조기 상환하고, 이후 신용점수 회복과 전세자금 마련을 통해 월세에서 전세로 이전하며 자산을 축적할 계획입니다.",
+    "comp_summary": "신청인은 경기 거주 34세 남성 정규직 영업직으로, 고졸 학력에 가구월수익 260만원, 중위소득 100% 이하이며 금융자산은 20만원뿐인데 차량 1천500만원을 포함한 자산 총액 1천520만원보다 부채 부담이 더 큽니다. 신용회복위원회 채무는 총 899만 3천원 중 777만 3천원이 남아 있고 96개월 중 11개월을 성실 납부해 월 9만 7천원을 상환 중이며, 별도 대출 3건도 총 2천210만원 중 2천40만 4천원이 남아 가중평균 금리 18.01%, 월 상환액 56만 9천원에 이릅니다. 어린 시절 주거비를 감당하려고 시작한 대출이 저금리 전환 권유를 거치며 불어나 개인회생 중도해지까지 겪은 뒤에도, 신청인은 현재 미납 없이 개인신용회복을 이어가고 있습니다. 여기에 어깨 골절, 치과치료 같은 돌발 의료비와 출근거리 증가로 인한 차량 구입이 겹치며 생계형 차입이 추가되었습니다. 월지출은 129만 9천원으로 집계되지만 고금리 부채를 안은 채 매달 상환과 생활을 반복하는 구조라 월급이 축적되지 못하고, “한달살이”를 끊고 싶다는 바람은 단순한 희망이 아니라 장기 채무에 눌린 삶의 피로를 보여줍니다. 그럼에도 신청인은 정규직 근로를 유지하며 채무를 우선 정리해 2024~2025년 내 조기상환을 목표로 삼고, 이후 신용을 회복해 월세를 벗어나 전세자금을 마련하려는 계획을 분명히 세우고 있습니다. 이 지원은 고금리·장기채무의 고리를 앞당겨 끊고, 매달 사라지는 소득을 남는 소득으로 전환해 신용 회복과 주거 안정으로 이어질 현실적인 전환점이 될 수 있습니다."
+  },
+  {
+    "id": "7VvLx",
+    "name": "김희O",
+    "type": "Middle",
+    "will_repay": true,
+    "demographics": {
+      "age": "29세 (1994년생)",
+      "job": "정규직 | 고졸",
+      "income": "2,800,000 원",
+      "expense": "2,130,000 원",
+      "gender_loc": "Female | 경기",
+      "fin_asset": "0 원",
+      "car_asset": "4,400,000 원",
+      "total_asset": "4,400,000 원"
+    },
+    "debt_shin": {
+      "total": "22,939,153 원",
+      "balance": "43,275,374 원",
+      "monthly": "37,519 원",
+      "history": "132개월中36개월",
+      "reason": "집안이 어려워 성인이 되자마자 신용이 안좋으신 부모님 대신 제 이름으로 대출을 받기 시작했습니다. 그 후 의류매장 사업을 돕다가 유지비가 없어 월급을 제때 못받아서 추가로 대출을 받아왔었습니다."
+    },
+    "debt_add": {
+      "exist": "N (총 0건)",
+      "balance": "0 원",
+      "monthly": "0 원",
+      "rate": "0.0 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "안녕하세요. 올해 29살이 된 김희O입니다.\n이런 제도가 있다는걸 알고 저에게 필요한 상황이라 참여하게 되었습니다.\n초등학생시절 친구따라 무용학원을 간 저는 무용수가 되는게 꿈이 되었습니다.\n무용계로 가기엔 어려운 형편이였지만 저의 재능을 보신 부모님은 힘들어도 저의 꿈을\n위해 많은 노력과 도움을 주셨고 중학생때 학원비가 없어 헬스장 연습실에서 연습을해\n한림연예예술고등학교 입시 오디션을 봤고 합격을 해 저의 미래가 더\n가까워졌었습니다. 고등학교 무용과에서 무용으로는 늘 3등안에 있었고 자신감이\n충만했지만 고3 입시시절 버스에 치이는 교통사고를 당하고 입시를 보지못하고\n졸업장만 받고 졸업을 했습니다. 성인이 되고 저희 집안이 재수를 할수있게 도울 수\n없는 상황을 너무나 크게 알아버렸고 카드론과 저축은행 대출로 부모님 생계를 도왔고\n카페,의류매장등 서비스직에서 일을 하며 생활을 하다 2020년 동물병원에 취업해 현재\n근무중입니다.",
+      "need": "부모님 모두 장애가 있어 휠체어와 목발 생활을 하시는데 어머니께서 장마철 넘어지셔서\n병원에 한달간 입원해 계셨고 여유자금이 많이 부족해 주택청약까지 해지하고 도움을\n드렸었습니다. 저금,저축할 여유가 없었고 현금이 없어 신용카드와 휴대폰결제로 사용한지\n석달 가까이 되어서 월급을 신용카드와 휴대폰요금 납부로 계속 내고 있는 중 입니다.\n현재 부모님들은 이혼하시고 각자 LH에 거주중이시며 저는 독립을 해 월세 집에\n거주중이며 곧 계약 만기입니다. 집주인분께서 재계약시 월세를 올리신다고 하셔서\n이사 준비를 해야하는데 부동산 복비 이사비용 등 여웃돈이 필요해 지원하게 되었습니다.\n카드값만 이라도 어느정도 납부를 하면 불안감을 줄일 수 있을 것 같습니다.\n어금니 치아도 8월달에 깨졌는데 아직 치과를 못갔습니다. 도움을 주시면 저에게\n큰 힘이 될 것 같습니다.",
+      "plan": "우선 부모님 두 분다 연세가 있으시고 몸이 불편하셔서 제가 앞으로 잘 하고 잘 살아야할\n부담감이 늘 있었습니다. 꿈을 접고 일을 하면서 대출값을 내기 빠듯한것도 있었지만\n끝까지 가보지 못한 제 꿈에 미련이 있어 부정적으로 생각하고 우울해 했던거 같습니다.\n이제는 철이 든건지 죄송한 마음과 부모님께서 도움이 필요할 때 언제든지 제가 나서서\n도울 수 있는 자녀가 되고 싶습니다. 혼자 자취생활을 하니 크게 돈을 모을 수 있는건\n아니지만 아끼고 아껴서 제대로 적금이란걸 해보고 싶습니다. 금전적으론 늘 비슷했지만\n현재는 마음의 여유는 조금 생겨서 자기개발에도 노력을 해보고 영어공부나 운동도 하면서\n제 정신과 몸건강을 위해 노력을 할거고 현재 근무중인 동물병원에서 일하면서 많은\n보람과 행복을 느끼고 있습니다. 많은 아이들을 케어하고 도와주면서 저의 경험과 능력을\n쌓고 싶습니다. 집을 살 수 있는 그날까지 열심히 아끼고 열심히 모아서 저와 가족들\n행복하게 지낼 수 있게 노력할것입니다."
+    },
+    "naive_summary": "신청인은 경기 거주 29세 여성으로 고졸, 동물병원 정규직 근무자이며 가구 월수입은 280만원, 월지출은 213만원으로 중위소득 150% 이하입니다. 금융자산은 없고 차량 440만원만 보유해 총자산은 440만원입니다. 부채는 신용회복위원회 채무 4천327만 5천원이며 132개월 중 36개월을 납입했고 월 상환액은 3만 8천원, 추가대출은 없습니다. 부채는 성인이 되자마자 신용이 좋지 않은 부모를 대신해 본인 명의로 대출을 받은 데서 시작됐고, 의류매장 사업을 돕는 과정에서 급여를 제때 받지 못해 추가 차입이 누적됐습니다. 무용 전공의 꿈은 교통사고로 중단됐고 이후 서비스직을 거쳐 2020년부터 동물병원에서 근무하며 생계를 이어왔습니다. 최근 장애가 있는 부모 지원과 어머니의 장기 입원으로 주택청약까지 해지했고, 석달가량 신용카드와 휴대폰결제로 버티며 급여 상당액을 카드값·통신비 상환에 쓰고 있습니다. 지원금은 월세 인상에 따른 이사비·복비, 카드대금 일부 상환, 미뤄둔 치과 진료에 사용할 계획이며, 향후에는 소비를 절감해 적금을 시작하고 동물병원 근무를 지속하며 자기계발과 가족 부양 기반을 마련하고자 합니다.",
+    "comp_summary": "신청인은 경기 거주 29세 여성 정규직으로 동물병원에서 일하며 가구월수익 280만원, 월지출 213만원, 금융자산 0원, 차량 440만원이 전부인 상황에서 신용회복위 채무 4,327만 5천원가량을 132개월 중 36개월째 월 3만 8천원씩 감당하고 있습니다. 부채는 성인이 되자마자 신용이 좋지 않은 부모를 대신해 본인 명의로 대출을 떠안고, 의류매장 사업을 돕는 과정에서 임금 공백과 운영비 부족을 메우려 추가 차입이 누적되며 시작됐습니다. 무용 전공의 꿈은 교통사고와 가계 붕괴로 멈췄고, 이후 카페·매장 일을 거쳐 2020년부터 현재 직장에 정착했으나 부모 모두 장애가 있어 반복적으로 생계·간병 부담을 함께 져왔습니다. 최근에는 어머니 입원비를 마련하려 청약까지 해지했고, 현금 부족으로 3개월가량 카드와 휴대폰 결제에 의존해 월급이 카드값과 통신비 상환으로 소진되는 구조입니다. 여기에 월세 재계약 인상으로 이사비와 복비가 임박했고, 깨진 어금니 치료도 미룬 채 버티는 상태여서 현재의 어려움은 단순한 절약의 문제가 아니라 생활 유지 자체가 흔들리는 국면입니다. 그럼에도 신청인은 독립 생활을 유지하며 부모를 도울 수 있는 자녀가 되기 위해 지출을 아끼고, 동물병원 업무에서 보람을 찾으며 자기개발과 저축 계획을 다시 세우고 있습니다. 이 지원은 카드·통신 연체 불안을 낮추고 이사·치과 같은 당면 비용을 정리해, 신청인이 생존 중심의 순환에서 벗어나 일을 지속하고 최소한의 저축 기반을 회복하는 현실적 전환점이 될 수 있습니다."
+  },
+  {
+    "id": "YSOFu",
+    "name": "장O정",
+    "type": "Middle",
+    "will_repay": false,
+    "demographics": {
+      "age": "38세 (1985년생)",
+      "job": "아르바이트 | 고졸",
+      "income": "1,800,000 원",
+      "expense": "1,770,000 원",
+      "gender_loc": "Female | 서울",
+      "fin_asset": "0 원",
+      "car_asset": "0 원",
+      "total_asset": "0 원"
+    },
+    "debt_shin": {
+      "total": "12,161,339 원",
+      "balance": "9,544,342 원",
+      "monthly": "153,941 원",
+      "history": "96개월中17개월",
+      "reason": "소득보다 지출이 많았어서 매달 100만원정도씩 누적이 되어 부채가 발생함"
+    },
+    "debt_add": {
+      "exist": "N (총 0건)",
+      "balance": "0 원",
+      "monthly": "0 원",
+      "rate": "0.0 %",
+      "reason": "미기재"
+    },
+    "story": {
+      "intro": "저는 초등5학년아이와 중등1학년 아이를 키우고 있는 엄마입니다 직장을 다니다가 코로나로 직장이 문을닫고 현재는 아르바이트를 하며 생활하고있습니다",
+      "need": "생활비가 매달 부족해 다른직장을 알아보고있지만 쉽게 취업이 되지않아 생계비로 사용할목적입니다",
+      "plan": "대출을 받아 조금이라도 생활에 도움을 받고 앞으로 취업준비와 자녀양육에 성실히 살게될것같습니다"
+    },
+    "naive_summary": "신청인은 서울 거주 38세 여성으로 고졸이며, 초등학교 5학년과 중학교 1학년 자녀를 양육하는 한부모로 보입니다. 코로나로 기존 직장이 폐업한 뒤 현재 서빙 아르바이트로 생계를 유지하고, 가구 월수입은 180만원이나 월지출이 177만원으로 사실상 여유자금이 거의 없습니다. 금융자산·차량을 포함한 자산 총액은 0원이며, 중위소득 100% 이하의 저소득 상태입니다. 부채는 과거 소득보다 지출이 많아 매달 약 100만원씩 적자가 누적되며 발생했고, 현재 신용회복위원회 채무 1,216만 1천원 중 96개월 상환계획에서 17개월을 납입해 잔액은 954만 4천원, 월 상환액은 15만 4천원입니다. 추가대출은 없고 추가 부채 잔액과 월 상환액도 모두 0원입니다. 신청인은 매달 부족한 생활비를 메우기 위해 지원금을 생계비로 사용하려 하며, 다른 직장을 계속 알아보고 있으나 취업이 쉽지 않은 상황입니다. 향후에는 대출로 단기 생활을 버티면서 취업 준비와 자녀 양육을 병행하고, 성실히 상환과 생활 안정을 도모할 계획입니다.",
+    "comp_summary": "신청인은 서울에 거주하는 38세 여성으로, 초등 5학년과 중등 1학년 자녀를 키우며 코로나로 기존 직장을 잃은 뒤 현재 서빙 아르바이트로 생계를 이어가고 있습니다. 고졸 학력, 중위소득 100% 이하 가구로 월수입은 180만원인데 월지출이 177만원에 달해 사실상 여유자금이 없고, 금융자산·차량·기타 자산도 전무합니다. 부채는 소득보다 지출이 매달 약 100만원씩 초과되며 누적된 결과로, 신용회복위원회 채무 1천216만 1천원 중 96개월 상환계획에서 17개월을 납입했으나 잔액이 954만 4천원 남아 있고 매달 15만 4천원을 꾸준히 갚고 있습니다. 추가대출은 없지만 이는 여력이 있어서가 아니라 더 기댈 곳 없이 버티고 있음을 보여줍니다. 신청인은 불안정한 일자리 속에서도 채무조정을 이행하며 두 자녀 양육과 생계를 함께 감당하고, 더 나은 일자리를 찾기 위해 취업을 계속 알아보고 있습니다. 이번 지원은 반복되는 생활비 부족을 메우는 단기 처방을 넘어, 구직 공백을 견디고 양육 부담을 안정시키며 채무상환 흐름을 무너뜨리지 않게 하는 현실적인 숨통이 될 수 있습니다."
+  },
+  {
+    "id": "4MDnz",
+    "name": "홍O름",
+    "type": "Middle",
+    "will_repay": true,
+    "demographics": {
+      "age": "33세 (1990년생)",
+      "job": "미취업 청년 | 초/대학졸업",
+      "income": "1,000,000 원",
+      "expense": "569,521 원",
+      "gender_loc": "Female | 경기",
+      "fin_asset": "4,000,000 원",
+      "car_asset": "0 원",
+      "total_asset": "4,000,000 원"
+    },
+    "debt_shin": {
+      "total": "7,881,103 원",
+      "balance": "5,149,513 원",
+      "monthly": "83,063 원",
+      "history": "96개월中34개월",
+      "reason": "영업직을 하다가 코로나때, 상황이 좋지 않아 이직을 하게 되었습니다. 그로인해 부채가 발생했습니다"
+    },
+    "debt_add": {
+      "exist": "Y (총 2건)",
+      "balance": "18,000,000 원",
+      "monthly": "399,521 원",
+      "rate": "9.4 %",
+      "reason": "이직하여 착실히 상환을 하던 중에 2023년 8월에 같이 거주하시던 할머니께서 소천하시고 개인적인 상황으로 직장을 그만두게 되어 현재 재취업 준비중입니다. 그로인해 부채상환에 어려움이 발생하여 신청합니다."
+    },
+    "story": {
+      "intro": "어린 시절부터 집안 형편이 좋지 않아 학창시절에도 학업과 함께 꾸준히 아르바이트를 해왔고, 졸업 후에는 직장생활도 하였으나, 형편이 나아지지 않아 실적에 따라 소득이 달라지는 영업직까지 하였습니다. 어느정도 영업직이 자리가 잡혀갈 쯤에 코로나로 인해 상황이 안좋아져 퇴사를 하게 되었고, 할머니를 모시게 살게 되어 안정적인 직업으로 이직을 하였으나, 할머니께서 작년 8월에 돌아가시면서 개인사정(건강)으로 인해 잠시 일을 쉬게되어 부채가 발생했기에 참여하게 되었습니다.",
+      "need": "현재 이직을 위해 자격증 취득중에 있으며 4월 초에 취직 에정입니다. 약 석달간의 생활비와 기존의 대출상환금 및 자격증 응시비로 사용할 예정입니다.",
+      "plan": "무이자 생계비 대출지원과 같은 좋은 제도는 저와 같은 어려운 삶 속에 있는 사람들에게는 한 템포 쉬어갈 수 있는 동아줄 같은 사업입니다. 부양 할 가족들이 있어 형편이 녹록하지는 못하나 풍요롭고 행복하게 살아갈 삶의 목표는 부여잡고 착실히 일 할 계획입니다."
+    },
+    "naive_summary": "신청인은 경기 거주 33세 여성 미취업 청년으로, 대학 졸업 후 생계 곤란 속에 학업과 아르바이트를 병행했고 현재 중위소득 130% 이하, 금융자산 4백만원 외 차량은 없습니다. 과거 영업직 종사 중 코로나로 이직하며 채무가 발생했고, 신용회복위원회 채무는 총 788만 1천원 중 514만 9천원 잔액이 남아 96개월 중 34개월을 납입했으며 월 상환액은 8만 3천원입니다. 이후 안정적 직장으로 옮겨 상환하던 중 2023년 8월 동거하던 할머니 사망과 건강상 사유로 퇴사해 재취업 준비에 들어가며 추가대출 부담이 커졌습니다. 추가대출은 2건, 총부채 1천8백만원, 잔액 1천7백만원, 가중평균금리 9.43%, 월 상환액 39만 9천원입니다. 총 자산 4백만원 대비 전체 잔여부채는 약 2천2백만원으로 부채 부담이 크며, 가구 월수익 1백만원에서 월지출 56만 9천원 중 대출상환만 약 48만 2천원을 차지합니다. 신청인은 현재 자격증 취득 중이며 4월 초 취업 예정으로, 향후 약 3개월 생활비와 기존 대출상환금, 자격증 응시비 용도로 지원금을 활용해 상환 공백을 메우고 재취업 후 성실히 근로·상환할 계획입니다.",
+    "comp_summary": "신청인은 경기 거주 33세 미취업 청년으로, 가구월수익 100만원에 금융자산 400만원뿐인 상황에서 신복위 잔액 514만 9천원과 추가대출 잔액 1천7백만원을 함께 감당하고 있습니다. 월상환액만 신복위 8만 3천원, 추가대출 39만 9천원으로 합계 48만 2천원이며, 가구월지출 56만 9천원 대비 상환 부담이 커 사실상 생활과 구직을 동시에 버티기 어려운 구조입니다. 부채는 코로나로 영업직을 그만두고 이직하는 과정에서 시작되었고, 이후 함께 살던 할머니의 사망과 건강 문제로 퇴직하며 상환 흐름이 다시 무너진 점이 특징적입니다. 특히 어린 시절부터 학업과 아르바이트를 병행했고, 졸업 후에도 소득 변동이 큰 일까지 감내하며 생계를 이어왔으나 형편이 쉽게 나아지지 않았습니다. 그럼에도 신복위 96개월 중 34개월을 납입했고, 현재도 자격증 취득을 준비하며 4월 초 재취업을 목표로 회복 경로를 스스로 만들고 있습니다. 이 지원은 약 3개월의 생활비, 기존 대출상환, 자격증 응시비를 버틸 최소한의 숨통이 되어 구직 공백기의 연체 악화를 막고 취업 이후 상환 재개 가능성을 현실적으로 높이는 계기가 됩니다. 가족 부양 책임까지 짊어진 신청인에게 이번 개입은 단순한 유예가 아니라, 상실과 중단 이후 다시 노동과 일상을 연결하는 징검다리입니다."
+  },
+  {
+    "id": "wR7iB",
+    "name": "김민O",
+    "type": "Middle",
+    "will_repay": false,
+    "demographics": {
+      "age": "37세 (1986년생)",
+      "job": "일용직 | 초/대학졸업",
+      "income": "1,601,710 원",
+      "expense": "1,256,093 원",
+      "gender_loc": "Female | 서울",
+      "fin_asset": "1,000,000 원",
+      "car_asset": "0 원",
+      "total_asset": "1,000,000 원"
+    },
+    "debt_shin": {
+      "total": "1,292,704 원",
+      "balance": "1,216,656 원",
+      "monthly": "10,864 원",
+      "history": "120개월中8개월",
+      "reason": "대학교 등록금으로 학자금대출을 받았고 대학교 재학중에 지인의 부탁으로 대출보증을 서주게 돼서 빚을 지게 되었고 그 빚을 해결하려고 학자금대출금 상환할 여력이 부족해 장기채무가 됐었ㅅ브니다."
+    },
+    "debt_add": {
+      "exist": "Y (총 1건)",
+      "balance": "500,000 원",
+      "monthly": "6,625 원",
+      "rate": "15.9 %",
+      "reason": "단기알바 기간이 끝나자 생활비가 부족해 소액생계비를 받았습니다."
+    },
+    "story": {
+      "intro": "저는 미취업 청년이고 나이가 곧 40인데... 장기 투석자, 집안사정, 사업아이템이 장기라 경력단절이 되었습니다. 현재 신용회복 중인 상태로 6개월 정도 되었습니다. 아직은 신용회복 중에 있습니다. 그래서 신용회복 중에 채무조정이 확정되어 채무변제 중인 분들 중에 한해서만 신용교육 이수하고 사업계획서 심사까지 통과되게 되면 저금리로 최대한도 5백만원까지 빌려주는 성북구의 햇살론 드림사업(성북희망나눔복지재단) 참여를 알게 되었습니다. 보증기관과 여러 담보를 알아가던 중 성북구에서(두나방 \"넥스트 드림사업\") 참여치 못했더라도 소식을 받아 지원하게 되었습니다.",
+      "need": "서민금융진흥원(소액생계비대출 50만원)상환\n서울시복지재단(희망플러스통장)유지\n임대아파트 거주관리비/의료비/교통비\n남은 돈은 학업과목 수강신청 후 갚으려고 합니다.",
+      "plan": "예전부터도 사회복지에 관심이 있어서 사회복지사 2급을 땄고 요양보호사 자격증도 공부하고 같이 따게 되었습니다. 최근에 경제상황이 어려워져서 사회복지사 1급도 욕심내서 공부하고 자격증 (실용성)사업을 올해 따냈는데 자금사정 신청이 많이 들어올거라 생각이 듭니다.\n국비지원 무료 취업성공패키지 1로 사업자 등록증을 땄었고, 배우고 싶어했던 학점 학위논문 연구 자격을 취득하고, 취업하면서 (최저시급) 돈을 벌게 되면서 남은 학점을 따내고, 학점은행제 수강을 다 할 수 있는게 제 목표이자 꿈입니다."
+    },
+    "naive_summary": "신청인은 서울 거주 37세 여성으로 일용직 상품관리 업무에 종사하며, 가구월수익 160만 2천원, 월지출 125만 6천원, 금융자산·총자산은 각 100만원, 차량은 없습니다. 중위소득 100% 이하의 저소득 상황에서 대학 등록금 학자금대출과 재학 중 지인 대출보증으로 채무가 발생했고, 상환 여력 부족으로 장기채무화되었습니다. 현재 신용회복위원회 채무는 총 129만 3천원 중 121만 7천원이 남아 있고, 120개월 중 8개월 납입했으며 월상환액은 1만 1천원입니다. 추가대출은 1건 50만원으로, 단기알바 종료 후 생활비 부족으로 받은 소액생계비이며 금리는 15.9%, 월상환액은 7천원, 잔액도 50만원입니다. 총부채는 약 171만 7천원으로, 제한된 소득 대비 상환이 이어지는 가운데 지원금은 서민금융진흥원 소액생계비대출 50만원 상환, 희망플러스통장 유지, 임대아파트 관리비·의료비·교통비에 사용할 계획입니다. 신청인은 장기투석, 집안사정, 장기화된 사업아이템 준비로 경력단절과 미취업 상태를 겪었으며 현재 신용회복 진행 6개월차입니다. 향후 사회복지사 1급, 요양보호사 등 자격과 학점은행제 이수를 이어가고 취업과 학업을 병행해 소득을 늘리며 남은 채무를 상환할 계획입니다.",
+    "comp_summary": "신청인은 서울 거주 37세 여성으로 일용직 상품관리 업무에 종사하며 가구월수익 160만 2천원, 월지출 125만 6천원, 금융자산은 100만원뿐인 저소득 상태입니다. 부채는 대학 등록금 학자금대출과 재학 중 지인 부탁으로 선 보증이 장기채무로 굳어진 경우로, 신용회복위원회 채무 129만 3천원 중 121만 7천원이 남아 있고 120개월 중 8개월째 월 1만 1천원가량을 상환 중입니다. 여기에 단기알바 종료 후 생활비 부족으로 받은 소액생계비 50만원이 연 15.9% 금리로 남아 월 7천원가량을 추가 상환하고 있습니다. 수입과 지출의 간격이 크지 않은 상황에서 임대아파트 관리비, 의료비, 교통비까지 감당해야 해 작은 현금흐름 흔들림도 곧 생계 압박으로 이어지는 구조입니다. 그럼에도 신청인은 신용회복 절차를 지속하며 사회복지사 2급과 요양보호사 공부를 이어 왔고, 사회복지사 1급과 추가 자격 취득, 학점은행제 이수와 취업을 함께 준비하고 있습니다. 이번 지원은 50만원 생계비대출 상환과 희망플러스통장 유지, 주거·의료·교통비 보전에 직접 쓰여 고금리·단기성 부담을 낮추고 회복 흐름이 끊기지 않도록 돕는 현실적 완충장치가 됩니다. 이는 단순한 비용 보전이 아니라 경력단절과 건강·가정 사정 속에서도 자격과 학업을 통해 다시 노동시장에 연결되려는 신청인에게 숨을 고르게 하는 징검다리가 될 수 있습니다."
+  }
+];
+
+const urlParams     = new URLSearchParams(window.location.search);
+const PARTICIPANT_ID = urlParams.get('pid') || 'test_' + Date.now();
+jsPsych.data.addProperties({ condition: CONDITION, participant_id: PARTICIPANT_ID });
+/* ── 2. 상태 초기화 ── */
+const shuffled = jsPsych.randomization.shuffle(applicantsData);
+const ratings     = {};   // {appId: {q_repay, q_will, q_approve}}
+const viewingMs   = {};   // 열람 시간(ms)
+const viewCounts  = {};   // 열람 횟수
+shuffled.forEach(a => {
+  ratings[a.id]    = { q_repay: null, q_will: null, q_urgency: null, q_approve: null };
+  viewingMs[a.id]  = 0;
+  viewCounts[a.id] = 0;
+});
+
+let selected     = new Set();
+let curId        = null;
+let viewStart    = null;
+let totalStart   = null;
+
+/* ── 3. 평가 문항 ── */
+const RATING_QS = [
+  { key:'q_repay',   label:'① <b>상환 능력</b>은 어느 정도로 예상하십니까?',   sub:'월 소득·부채를 고려해 24개월 상환 가능성을 평가합니다.', L:'상환 불가능해 보임', R:'상환 문제없을 것 같음' },
+  { key:'q_will',    label:'② 재무 상황을 <b>개선하려는 의지</b>는 어느 정도입니까?', sub:'사연의 구체성·진정성을 바탕으로 판단합니다.',           L:'개선 의지 거의 없음', R:'개선 의지 매우 강함' },
+  { key:'q_urgency', label:'③ 이 신청자에 대한 자금 지원의 <b>긴급성</b>은 어느 정도라고 판단하십니까?', sub:'신청자의 현재 상황을 고려할 때, 지금 당장 자금 지원이 필요한 정도를 평가합니다.', L:'전혀 긴급해 보이지 않음', R:'지원이 매우 시급해 보임' },
+  { key:'q_approve', label:'④ <b>대출 승인 의향</b>은 어느 정도입니까?',         sub:'전반적인 인상을 종합해 최종 의향을 표시해주세요.',       L:'전혀 승인 의향 없음', R:'매우 승인하고 싶음' }
+];
+
+/* ── 4. HTML 빌더 ── */
+function ratingHtml(appId) {
+  const sv = ratings[appId];
+  const done = RATING_QS.every(q => sv[q.key] !== null);
+  return `<div class="rating-section" id="rs-${appId}">
+    <div class="rating-title">📝 이 지원자 평가</div>
+    ${RATING_QS.map(q => `
+      <div class="rating-item">
+        <div class="rating-q">${q.label}</div>
+        <div class="rating-sub">${q.sub}</div>
+        <div class="likert-row">
+          <span class="likert-anchor">${q.L}</span>
+          <div class="likert-btns" id="lb-${appId}-${q.key}">
+            ${[1,2,3,4,5,6,7].map(v=>`<button class="lbtn${sv[q.key]===v?' selected':''}"
+              onclick="rate('${appId}','${q.key}',${v},this)">${v}</button>`).join('')}
+          </div>
+          <span class="likert-anchor right">${q.R}</span>
+        </div>
+      </div>`).join('')}
+    <div class="rating-done" id="rd-${appId}" style="display:${done?'block':'none'}">✅ 평가 저장됨</div>
+  </div>`;
+}
+
+function detailHtml(app) {
+  const isSel = selected.has(app.id);
+  let sumHtml = '';
+  if (CONDITION === 'naive')
+    sumHtml = `<div class="summary-card naive"><div class="summary-label">🤖 AI 표준 요약</div>${app.naive_summary}</div>`;
+  else if (CONDITION === 'compassionate')
+    sumHtml = `<div class="summary-card compassionate"><div class="summary-label">🤖 AI 공감형 요약</div>${app.comp_summary}</div>`;
+
+  return `
+    <div style="position:sticky;top:0;z-index:10;background:#f4f7f6;display:flex;align-items:center;justify-content:space-between;padding:12px 0 10px;margin-bottom:4px;border-bottom:1px solid #ddd;">
+      <h2 style="margin:0;font-size:20px;color:#2c3e50;">📄 ${app.name} 지원자</h2>
+      <button id="fb-${app.id}" class="fund-btn${isSel?' selected':''}"
+        onclick="toggleFund('${app.id}')">${isSel?'✓ 선택됨 (클릭 시 해제)':'+ 승인 대상 추가'}</button>
+    </div>
+    ${sumHtml}
+    <div class="section-title">기본 인적 사항</div>
+    <div class="grid-container">
+      <div class="data-item"><div class="data-label">나이</div><div class="data-value">${app.demographics.age}</div></div>
+      <div class="data-item"><div class="data-label">고용 | 학력</div><div class="data-value">${app.demographics.job}</div></div>
+      <div class="data-item"><div class="data-label">성별 | 거주</div><div class="data-value">${app.demographics.gender_loc}</div></div>
+      <div class="data-item"><div class="data-label">월 수익</div><div class="data-value val-green">${app.demographics.income}</div></div>
+      <div class="data-item"><div class="data-label">월 지출</div><div class="data-value">${app.demographics.expense}</div></div>
+      <div class="data-item"><div class="data-label">금융 자산</div><div class="data-value val-blue">${app.demographics.fin_asset}</div></div>
+      <div class="data-item"><div class="data-label">차량 자산</div><div class="data-value">${app.demographics.car_asset}</div></div>
+      <div class="data-item"><div class="data-label">총 자산</div><div class="data-value val-blue">${app.demographics.total_asset}</div></div>
+    </div>
+    <div class="section-title">채무 내역</div>
+    <div class="debt-grid">
+      <div class="debt-card"><h4>🏦 신용회복위원회</h4>
+        <div class="debt-row"><span>총 채무</span><span class="val-red">${app.debt_shin.total}</span></div>
+        <div class="debt-row"><span>잔액</span><span class="val-red">${app.debt_shin.balance}</span></div>
+        <div class="debt-row"><span>월 상환</span><span>${app.debt_shin.monthly}</span></div>
+        <div class="debt-row"><span>납입 현황</span><span>${app.debt_shin.history}</span></div>
+        <div class="debt-reason"><b>사유:</b> ${app.debt_shin.reason}</div>
+      </div>
+      <div class="debt-card"><h4>💳 추가 대출</h4>
+        <div class="debt-row"><span>여부</span><span>${app.debt_add.exist}</span></div>
+        <div class="debt-row"><span>잔액</span><span class="val-red">${app.debt_add.balance}</span></div>
+        <div class="debt-row"><span>월 상환</span><span>${app.debt_add.monthly}</span></div>
+        <div class="debt-row"><span>이자율</span><span class="val-red">${app.debt_add.rate}</span></div>
+        <div class="debt-reason"><b>사유:</b> ${app.debt_add.reason}</div>
+      </div>
+    </div>
+    <div class="section-title">자기소개 및 지원 정보</div>
+    <div class="text-box"><div class="text-box-title">자기소개</div>${app.story.intro}</div>
+    <div class="text-box"><div class="text-box-title">지원금 사용 계획</div>${app.story.need}</div>
+    <div class="text-box"><div class="text-box-title">향후 계획</div>${app.story.plan}</div>
+    ${ratingHtml(app.id)}`;
+}
+
+/* ── 5. 전역 핸들러 ── */
+window.rate = function(appId, qKey, val, btn) {
+  document.getElementById(`lb-${appId}-${qKey}`)
+    .querySelectorAll('.lbtn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  ratings[appId][qKey] = val;
+  if (RATING_QS.every(q => ratings[appId][q.key] !== null)) {
+    const d = document.getElementById(`rd-${appId}`);
+    if (d) d.style.display = 'block';
+    const card = document.getElementById(`card-${appId}`);
+    if (card && !card.querySelector('.rated-badge')) {
+      const b = document.createElement('span');
+      b.className = 'rated-badge'; b.textContent = '평가완료 ✓';
+      card.querySelector('.card-name').after(b);
+    }
+    // 모든 지원자 평가 완료 시 차단 메시지 숨김
+    const allDone = shuffled.every(a => RATING_QS.every(q => ratings[a.id][q.key] !== null));
+    if (allDone) {
+      const msg = document.getElementById('submit-block-msg');
+      if (msg) msg.style.display = 'none';
+    }
+  }
+};
+
+window.toggleFund = function(appId) {
+  if (selected.has(appId)) {
+    selected.delete(appId);
+  } else {
+    if (selected.size >= 5) { alert('최대 5명까지만 선택할 수 있습니다.'); return; }
+    selected.add(appId);
+  }
+  syncCard(appId);
+  updateBasket();
+};
+
+function syncCard(appId) {
+  const chk  = document.getElementById(`chk-${appId}`);
+  const card = document.getElementById(`card-${appId}`);
+  const fb   = document.getElementById(`fb-${appId}`);
+  const isSel = selected.has(appId);
+  if (chk)  chk.checked = isSel;
+  if (card) card.classList.toggle('selected-for-fund', isSel);
+  if (fb)  { fb.classList.toggle('selected', isSel); fb.textContent = isSel ? '✓ 선택됨 (클릭 시 해제)' : '+ 승인 대상 추가'; }
+}
+
+function updateBasket() {
+  const c = document.getElementById('bcount');
+  if (c) c.textContent = selected.size;
+  const btn = document.getElementById('sbtn');
+  if (btn) {
+    if (selected.size === 5) { btn.className = 'submit-btn ready'; btn.textContent = '최종 제출하기 →'; btn.disabled = false; }
+    else { btn.className = 'submit-btn'; btn.textContent = `${5-selected.size}명 더 선택해주세요`; btn.disabled = true; }
+  }
+}
+
+window.handleSubmit = function() {
+  if (selected.size !== 5) return;
+
+  // 평가 미완료 지원자 확인 — 있으면 차단
+  const unrated = shuffled.filter(a => RATING_QS.some(q => ratings[a.id][q.key] === null));
+  if (unrated.length > 0) {
+    const names = unrated.map(a => `<b>${a.name}</b>`).join(', ');
+    const box = document.getElementById('submit-block-msg');
+    box.innerHTML = `⚠️ 아직 평가를 완료하지 않은 지원자가 있습니다: ${names}<br>
+      <span style="font-size:12px;color:#888;">각 지원서 하단의 평가 항목(①②③)을 모두 선택해주세요.</span>`;
+    box.style.display = 'block';
+    // 첫 번째 미완료 지원자 카드로 스크롤 & 하이라이트
+    const firstCard = document.getElementById('card-' + unrated[0].id);
+    if (firstCard) {
+      firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstCard.style.outline = '2px solid #e74c3c';
+      setTimeout(() => { firstCard.style.outline = ''; }, 2000);
+    }
+    return;
+  }
+
+  // 통과 — 제출
+  document.getElementById('submit-block-msg').style.display = 'none';
+  if (curId) viewingMs[curId] += performance.now() - viewStart;
+  jsPsych.finishTrial({
+    selected_applicants: Array.from(selected),
+    viewing_times_ms:    viewingMs,
+    view_counts:         viewCounts,
+    ratings:             ratings,
+    total_time_ms:       Math.round(performance.now() - totalStart),
+    applicant_order:     shuffled.map(a => a.id)
+  });
+};
+
+/* ── 6. 메인 Trial ── */
+const condLabel = { control:'요약 없음', naive:'AI 표준 요약', compassionate:'AI 공감형 요약' };
+
+const main_task = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+      <b style="font-size:16px;">대출 심사 실험</b>
+
+    </div>
+    <div class="exp-container">
+      <div class="left-panel">
+        <div style="font-size:12px;font-weight:700;color:#999;padding:4px 6px 10px;border-bottom:1px solid #eee;margin-bottom:8px;">지원자 목록 (10명)</div>
+        <div id="app-list"></div>
+      </div>
+      <div class="right-panel" id="right-panel">
+        <div class="placeholder"><div><div style="font-size:40px;">👈</div><p>지원자를 클릭해 상세 내용을 확인하세요</p><p style="font-size:13px;color:#ccc;">모든 지원자 검토 후 5명을 선택해주세요</p></div></div>
+      </div>
+    </div>
+    <div id="submit-block-msg" style="display:none; margin-top:8px; padding:10px 16px;
+      background:#fff3f3; border:1.5px solid #e74c3c; border-radius:8px;
+      font-size:13px; color:#c0392b; line-height:1.6;"></div>
+    <div class="bottom-bar">
+      <div class="basket-info">
+        <span>승인 선택:</span>
+        <span class="basket-count" id="bcount">0</span>
+        <span style="font-size:18px;color:#aaa;">/ 5명</span>
+      </div>
+      <button id="sbtn" class="submit-btn" disabled onclick="handleSubmit()">5명 더 선택해주세요</button>
+    </div>`,
+  choices: [],
+  on_load: function() {
+    totalStart = performance.now();
+    const listDiv = document.getElementById('app-list');
+    const rightPanel = document.getElementById('right-panel');
+
+    shuffled.forEach(app => {
+      const card = document.createElement('div');
+      card.className = 'applicant-card';
+      card.id = `card-${app.id}`;
+      card.innerHTML = `
+        <div class="card-row">
+          <input type="checkbox" id="chk-${app.id}" style="transform:scale(1.4);cursor:pointer;">
+          <span class="card-name">${app.name} 지원서</span>
+        </div>
+`;
+      listDiv.appendChild(card);
+
+      // 카드 클릭 → 상세 보기
+      card.addEventListener('click', e => {
+        if (e.target.type === 'checkbox') return;
+        if (curId) viewingMs[curId] += performance.now() - viewStart;
+        viewCounts[app.id]++;
+        curId = app.id;
+        viewStart = performance.now();
+        document.querySelectorAll('.applicant-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        // 열람 횟수 tracking만 (표시 안함)
+        rightPanel.innerHTML = detailHtml(app);
+      });
+
+      // 체크박스 클릭 → 선택 토글
+      document.getElementById(`chk-${app.id}`).addEventListener('change', e => {
+        if (e.target.checked && selected.size >= 5) {
+          alert('최대 5명까지만 선택할 수 있습니다.');
+          e.target.checked = false; return;
+        }
+        if (e.target.checked) selected.add(app.id);
+        else selected.delete(app.id);
+        syncCard(app.id);
+        updateBasket();
+      });
+    });
+  }
+};
+
+jsPsych.run([main_task]);
+</script>
+</body>
+</html>
