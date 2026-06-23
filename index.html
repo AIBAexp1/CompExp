@@ -627,7 +627,7 @@ function handleFinalSubmit() {
 }
 
 function finishExperiment() {
-  // 데이터 패키징
+  // ── 데이터 패키징 ──
   const output = {
     participant: PARTICIPANT,
     condition: CONDITION,
@@ -639,27 +639,85 @@ function finishExperiment() {
     viewing_times_ms: viewingTimes,
     timestamp: new Date().toISOString()
   };
-
-  // jsPsych data로 저장 시도 (없으면 콘솔에만)
-  try {
-    if (typeof jsPsych !== 'undefined') {
-      jsPsych.data.write(output);
-    }
-  } catch(e) {}
   console.log('EXPERIMENT_DATA', JSON.stringify(output));
 
-  // 완료 화면
+  // ── 완료 화면 (데이터 전송 중 메시지) ──
   document.getElementById('experiment-container').innerHTML = `
     <div style="text-align:center; padding:60px 20px;">
       <h2 style="color:#27ae60;">모든 평가가 완료되었습니다.</h2>
       <p style="color:#555; margin-top:12px;">참여해 주셔서 감사합니다.</p>
-      ${RETURN_URL ? `<p style="margin-top:20px;"><a href="${RETURN_URL}" style="background:#3498db;color:white;padding:10px 28px;border-radius:6px;text-decoration:none;font-weight:600;">설문으로 돌아가기</a></p>` : ''}
+      <p id="save-status" style="color:#888; margin-top:16px; font-size:14px;">
+        데이터를 저장하는 중입니다...
+      </p>
+      ${RETURN_URL ? `
+        <p style="color:#aaa; margin-top:8px; font-size:13px;">
+          저장 완료 후 자동으로 이동합니다.
+          (<span id="countdown" style="font-weight:700; color:#2980b9;">-</span>초)
+        </p>
+        <p style="margin-top:12px;">
+          <a id="manual-link" href="${RETURN_URL}"
+             style="background:#bdc3c7;color:white;padding:10px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;pointer-events:none;">
+            바로 이동하기
+          </a>
+        </p>
+      ` : ''}
       <details style="margin-top:30px; text-align:left; max-width:600px; margin-inline:auto;">
-        <summary style="cursor:pointer; color:#888; font-size:13px;">데이터 확인 (개발용)</summary>
+        <summary style="cursor:pointer; color:#ccc; font-size:12px;">데이터 확인 (개발용)</summary>
         <pre style="font-size:11px; background:#f4f4f4; padding:12px; border-radius:6px; overflow:auto;">${JSON.stringify(output, null, 2)}</pre>
       </details>
     </div>
   `;
+
+  // ── DataPipe 저장 후 redirect ──
+  const EXPERIMENT_ID = 'yLA2GpFCObm6';
+  const filename = `${PARTICIPANT}_${Date.now()}.json`;
+
+  function startRedirect() {
+    const statusEl = document.getElementById('save-status');
+    const linkEl   = document.getElementById('manual-link');
+    if (statusEl) statusEl.textContent = '저장 완료. 잠시 후 설문 페이지로 이동합니다...';
+    if (linkEl) {
+      linkEl.style.background = '#3498db';
+      linkEl.style.pointerEvents = 'auto';
+    }
+    if (!RETURN_URL) return;
+    let count = 3;
+    const el = document.getElementById('countdown');
+    if (el) el.textContent = count;
+    const timer = setInterval(() => {
+      count--;
+      if (el) el.textContent = count;
+      if (count <= 0) {
+        clearInterval(timer);
+        window.location.href = RETURN_URL;
+      }
+    }, 1000);
+  }
+
+  fetch('https://pipe.jspsych.org/api/data/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      experimentID: EXPERIMENT_ID,
+      filename: filename,
+      data: JSON.stringify(output)
+    })
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('DataPipe 응답 오류: ' + res.status);
+    return res.json();
+  })
+  .then(() => {
+    console.log('DataPipe 저장 완료:', filename);
+    startRedirect();
+  })
+  .catch(err => {
+    // 저장 실패해도 redirect는 진행 (데이터 유실 로그만 남김)
+    console.error('DataPipe 저장 실패:', err);
+    const statusEl = document.getElementById('save-status');
+    if (statusEl) statusEl.textContent = '저장 중 오류가 발생했습니다. 잠시 후 이동합니다.';
+    startRedirect();
+  });
 }
 
 // ──────────────────────────────────────────────
