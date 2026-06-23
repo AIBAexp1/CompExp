@@ -115,6 +115,7 @@ const SUMMARIES_URL = 'https://raw.githubusercontent.com/AIBAexp1/CompExp/main/s
 const urlParams = new URLSearchParams(window.location.search);
 const CONDITION   = urlParams.get('condition') || 'naive';      // naive | compassionate | control
 const PARTICIPANT = urlParams.get('PROLIFIC_PID') || 'TEST';
+const RESPONSE_ID = urlParams.get('RESPONSE_ID') || '';          // Qualtrics ResponseID (데이터 병합 key)
 const RETURN_URL  = urlParams.get('return_url') || null;
 
 // ──────────────────────────────────────────────
@@ -696,6 +697,7 @@ function handleFinalSubmit() {
 function finishExperiment() {
   // ── 데이터 패키징 ──
   const output = {
+    response_id: RESPONSE_ID,
     participant: PARTICIPANT,
     condition: CONDITION,
     summaries_version: SUMMARIES.__version__ || 'unknown',
@@ -737,7 +739,9 @@ function finishExperiment() {
 
   // ── DataPipe 저장 후 redirect ──
   const EXPERIMENT_ID = 'yLA2GpFCObm6';
-  const filename = `${PARTICIPANT}_${Date.now()}.json`;
+  // 파일명: ResponseID 우선 (Qualtrics 데이터와 병합 key). 없으면 PID/타임스탬프 fallback
+  const fileKey = RESPONSE_ID || PARTICIPANT || 'NOID';
+  const filename = `${fileKey}_${Date.now()}.json`;
 
   function startRedirect() {
     const statusEl = document.getElementById('save-status');
