@@ -506,6 +506,7 @@ function selectApplicant(idx) {
   // 우측 패널
   const rightPanel = document.getElementById('right-panel');
   rightPanel.innerHTML = `<div id="detail-area">${detailHTML}</div>`;
+  rightPanel.scrollTop = 0;  // 항상 최상단부터 보이게
 
   // 기존 응답 복원
   if (responses[a.id]) {
@@ -576,6 +577,22 @@ function submitCurrent() {
 
   // 모두 완료 시 최종 제출 버튼 활성화 체크
   updateFinalSubmit();
+
+  // 다음 미완료 지원자로 자동 이동 (없으면 현재 화면 유지)
+  const nextIdx = findNextUnsubmitted(currentIdx);
+  if (nextIdx !== -1) {
+    selectApplicant(nextIdx);
+  }
+}
+
+// 현재 인덱스 이후부터 순환하며 미제출 지원자 찾기
+function findNextUnsubmitted(fromIdx) {
+  const n = SESSION_APPLICANTS.length;
+  for (let step = 1; step <= n; step++) {
+    const idx = (fromIdx + step) % n;
+    if (!submittedIds.has(SESSION_APPLICANTS[idx].id)) return idx;
+  }
+  return -1;  // 전부 제출됨
 }
 
 function updateProgress() {
