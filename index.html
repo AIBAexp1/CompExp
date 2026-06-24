@@ -436,9 +436,11 @@ function buildLikertHTML(applicantId) {
 // ──────────────────────────────────────────────
 let SESSION_APPLICANTS = [];   // 이번 세션 4명
 let SUMMARIES = {};            // summaries.json 내용
-let currentIdx = 0;            // 현재 선택된 카드 인덱스
+let currentIdx = null;         // 현재 선택된 카드 인덱스 (최초 진입 전 null)
 let responses  = {};           // { appId: { q_repay:v, ... } }
-let viewingTimes = {};         // { appId: ms }
+let viewingTimes = {};         // { appId: ms } 누적 열람 시간
+let viewCounts = {};           // { appId: n } 열람(전환) 횟수
+let expandedSections = {};     // { appId: { info:bool, debt:bool, story:bool } } 상세 펼침 여부
 let startTimes   = {};         // { appId: timestamp }
 let submittedIds = new Set();  // 평가 제출 완료된 appId
 let selectedIds  = new Set();  // 승인 선택된 appId (최대 2명)
@@ -522,6 +524,9 @@ function buildLeftPanel() {
 }
 
 function selectApplicant(idx) {
+  // 같은 지원자를 다시 누른 경우: 아무것도 하지 않음 (열람 횟수/시간 중복 방지)
+  if (idx === currentIdx) return;
+
   // 이전 카드 viewing time 기록
   if (currentIdx !== null && SESSION_APPLICANTS[currentIdx]) {
     const prevId = SESSION_APPLICANTS[currentIdx].id;
@@ -533,6 +538,7 @@ function selectApplicant(idx) {
   currentIdx = idx;
   const a = SESSION_APPLICANTS[idx];
   startTimes[a.id] = Date.now();
+  viewCounts[a.id] = (viewCounts[a.id] || 0) + 1;  // 이 지원자로 전환한 횟수
 
   // 카드 active 표시 갱신
   document.querySelectorAll('.applicant-card').forEach(c => c.classList.remove('active'));
@@ -648,7 +654,19 @@ function updateProgress() {
 
 function toggleCollapse(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.toggle('open');
+  if (!el) return;
+  el.classList.toggle('open');
+
+  // 펼쳤을 때 기록 (id 형식: col-{section}-{appId}, appId에 '-' 없음 가정)
+  if (el.classList.contains('open')) {
+    const m = id.match(/^col-(info|debt|story)-(.+)$/);
+    if (m) {
+      const section = m[1];
+      const appId = m[2];
+      if (!expandedSections[appId]) expandedSections[appId] = { info:false, debt:false, story:false };
+      expandedSections[appId][section] = true;
+    }
+  }
 }
 
 function toggleFundBtn(appId) {
@@ -706,6 +724,8 @@ function finishExperiment() {
     app_type_map: Object.fromEntries(SESSION_APPLICANTS.map(a => [a.id, APP_TYPE_MAP[a.id]])),
     responses,
     viewing_times_ms: viewingTimes,
+    view_counts: viewCounts,
+    expanded_sections: expandedSections,
     timestamp: new Date().toISOString()
   };
   console.log('EXPERIMENT_DATA', JSON.stringify(output));
@@ -810,7 +830,7 @@ async function init() {
   SESSION_APPLICANTS = sampleApplicants(APPLICANTS_DATA);
 
   // 초기 responses 객체 생성
-  SESSION_APPLICANTS.forEach(a => { responses[a.id] = {}; viewingTimes[a.id] = 0; });
+  SESSION_APPLICANTS.forEach(a => { responses[a.id] = {}; viewingTimes[a.id] = 0; viewCounts[a.id] = 0; expandedSections[a.id] = { info:false, debt:false, story:false }; });
 
   document.getElementById('loading-screen').style.display = 'none';
   document.getElementById('experiment-container').style.display = 'block';
