@@ -30,8 +30,7 @@ body { margin: 0; padding: 20px; background: #f4f7f6; font-family: 'Malgun Gothi
 .collapsible { border: 1px solid #e0e6ed; border-radius: 8px; margin-bottom: 10px; background: #fff; overflow: hidden; }
 .collapsible-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; font-size: 16px; font-weight: 700; color: #34495e; background: #f8fafb; user-select: none; }
 .collapsible-header:hover { background: #eef3f6; }
-.collapsible-header .chevron { font-size: 13px; color: #888; transition: transform 0.2s; }
-.collapsible.open .collapsible-header .chevron { transform: rotate(180deg); }
+.collapsible-header .chevron { font-size: 13px; color: #888; }
 .collapsible-body { display: none; padding: 16px 18px; }
 .collapsible.open .collapsible-body { display: block; }
 
@@ -296,9 +295,9 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
     ${summaryHTML}
 
     <!-- 기본 정보 (접이식) -->
-    <div class="collapsible" id="col-info-${a.id}">
+    <div class="collapsible open" id="col-info-${a.id}">
       <div class="collapsible-header" onclick="toggleCollapse('col-info-${a.id}')">
-        <span>기본 인적 사항</span><span class="chevron">▼ 펼쳐보기</span>
+        <span>기본 인적 사항</span><span class="chevron">▲ 접기</span>
       </div>
       <div class="collapsible-body">
         <div class="grid-container">
@@ -365,10 +364,20 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
       <div class="rating-block-desc">아래 문항에 모두 응답한 뒤, 승인 대상으로 추가할지 결정하고 제출하세요.</div>
       ${ratingsHTML}
 
-      <!-- 승인 대상 추가 버튼 (평가 직후, 제출 직전) -->
-      <div style="margin-top:20px; padding-top:18px; border-top:1px dashed #d0d8de; text-align:center;">
-        <button id="fb-${a.id}" class="fund-btn${isSel?' selected':''}"
-          onclick="toggleFundBtn('${a.id}')">${isSel ? '✓ 승인 대상으로 선택됨 (클릭 시 해제)' : '+ 이 지원자를 승인 대상으로 추가'}</button>
+      <!-- 평가 완료 버튼 + 승인 버튼 (평가 문항 바로 아래) -->
+      <div style="margin-top:22px; padding-top:18px; border-top:2px dashed #d0d8de;">
+        <div style="margin-bottom:14px; font-size:14px; color:#888; text-align:center;">
+          ⬆ 모든 문항에 응답했다면 평가를 완료하세요. 완료 후에도 클릭하면 수정할 수 있습니다.
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <button id="fb-${a.id}" class="fund-btn${isSel?' selected':''}"
+            onclick="toggleFundBtn('${a.id}')">${isSel ? '✓ 승인 대상자로 선택됨 (클릭 시 해제)' : '+ 이 지원자를 승인 대상자로 선택'}</button>
+          <button id="submit-btn-${a.id}" class="btn-primary btn-submit"
+            onclick="submitCurrent()"
+            ${submittedIds.has(a.id) ? '' : 'disabled'}>
+            ${submittedIds.has(a.id) ? '✅ 평가 완료 (클릭하면 수정)' : '이 지원자 평가 완료'}
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -414,15 +423,16 @@ const QUESTIONS = [
 ];
 
 function buildLikertHTML(applicantId) {
+  const locked = submittedIds.has(applicantId);
   return QUESTIONS.map(q => `
-    <div class="rating-area">
+    <div class="rating-area" ${locked ? 'style="opacity:0.6; pointer-events:none;"' : ''}>
       <label>${q.label}</label>
       ${q.sub ? `<div style="font-size:12px;color:#999;margin-bottom:6px;">${q.sub}</div>` : ''}
       <div class="likert-row">
         <span class="anchor">${q.L}</span>
         ${[1,2,3,4,5,6,7].map(v => `
           <label class="radio-label">
-            <input type="radio" name="${applicantId}_${q.id}" value="${v}">
+            <input type="radio" name="${applicantId}_${q.id}" value="${v}" ${locked ? 'disabled' : ''}>
             <span>${v}</span>
           </label>`).join('')}
         <span class="anchor">${q.R}</span>
@@ -468,8 +478,7 @@ function buildExperiment() {
       <div class="right-panel" id="right-panel"><p style="color:#999; margin-top:40px; text-align:center;">좌측에서 지원자를 선택하세요.</p></div>
     </div>
     <div class="bottom-bar">
-      <div id="bottom-status" style="font-size:13px; color:#888;">지원자를 선택하고 모든 문항에 응답한 후 제출하세요.</div>
-      <button class="btn-primary btn-submit" id="submit-btn" disabled onclick="submitCurrent()">이 지원자 제출</button>
+      <div id="bottom-status" style="font-size:13px; color:#888;">지원자를 선택하고 모든 문항에 응답한 후 평가를 완료하세요.</div>
     </div>
     <div class="bottom-bar" style="margin-top:8px; justify-content:space-between;">
       <div style="font-size:15px;">
@@ -480,7 +489,7 @@ function buildExperiment() {
       </div>
       <button id="final-submit-btn" disabled onclick="handleFinalSubmit()"
         style="padding:10px 28px; font-size:15px; font-weight:700; border-radius:8px; border:none; background:#ddd; color:#aaa; cursor:not-allowed;">
-        최종 제출하기 →
+        평가 및 선택 결과 최종 제출하기 →
       </button>
     </div>
   `;
@@ -569,9 +578,7 @@ function selectApplicant(idx) {
   }
 
   // 라디오 변경 시 제출 버튼 활성화 체크
-  document.querySelectorAll(`input[type=radio]`).forEach(r => {
-    r.addEventListener('change', checkSubmitReady);
-  });
+  attachRadioListeners(a.id);
 
   updateSubmitBtn();
 }
@@ -579,7 +586,6 @@ function selectApplicant(idx) {
 function checkSubmitReady() {
   const a = SESSION_APPLICANTS[currentIdx];
   if (!a) return;
-  // 현재 선택된 응답 임시 저장
   responses[a.id] = responses[a.id] || {};
   QUESTIONS.forEach(q => {
     const checked = document.querySelector(`input[name="${a.id}_${q.id}"]:checked`);
@@ -591,15 +597,23 @@ function checkSubmitReady() {
 function updateSubmitBtn() {
   const a = SESSION_APPLICANTS[currentIdx];
   if (!a) return;
-  const btn = document.getElementById('submit-btn');
+  const btn = document.getElementById(`submit-btn-${a.id}`);
+  if (!btn) return;
   const allAnswered = QUESTIONS.every(q => responses[a.id] && responses[a.id][q.id]);
-  btn.disabled = !allAnswered || submittedIds.has(a.id);
-  if (submittedIds.has(a.id)) {
-    btn.textContent = '제출 완료';
-    document.getElementById('bottom-status').textContent = '이 지원자의 평가가 완료되었습니다.';
+  const isSubmitted = submittedIds.has(a.id);
+
+  if (isSubmitted) {
+    // 제출 완료 상태: 클릭하면 해제 가능, 항상 활성
+    btn.disabled = false;
+    btn.textContent = '✅ 평가 완료 (클릭하면 수정)';
+    btn.style.background = '#7f8c8d';
+    document.getElementById('bottom-status').textContent = '평가가 완료되었습니다. 버튼을 클릭하면 수정할 수 있습니다.';
   } else {
-    btn.textContent = '이 지원자 제출';
-    document.getElementById('bottom-status').textContent = allAnswered ? '제출 준비 완료.' : '모든 문항에 응답 후 제출하세요.';
+    // 미제출 상태: 전체 응답 시에만 활성
+    btn.disabled = !allAnswered;
+    btn.textContent = '이 지원자 평가 완료';
+    btn.style.background = allAnswered ? '' : '';
+    document.getElementById('bottom-status').textContent = allAnswered ? '모든 문항에 응답했습니다. 평가를 완료하세요.' : '모든 문항에 응답한 후 평가를 완료하세요.';
   }
 }
 
@@ -607,6 +621,32 @@ function submitCurrent() {
   const a = SESSION_APPLICANTS[currentIdx];
   if (!a) return;
 
+  // ── 이미 제출된 경우: 해제(수정 모드)로 전환 ──
+  if (submittedIds.has(a.id)) {
+    submittedIds.delete(a.id);
+    const card = document.getElementById(`card-${a.id}`);
+    if (card) card.classList.remove('decided');
+    // 현재 스크롤 위치 저장
+    const panel = document.getElementById('right-panel');
+    const scrollPos = panel ? panel.scrollTop : 0;
+    // 우측 패널 재렌더링 (잠금 해제)
+    const sData = SUMMARIES[a.id] || {};
+    let summaryText = '';
+    if (CONDITION === 'naive') summaryText = sData.naive || '';
+    else if (CONDITION === 'compassionate') summaryText = sData.compassionate || '';
+    const summaryHTML = buildSummaryHTML(summaryText, CONDITION);
+    const ratingsHTML = buildLikertHTML(a.id);
+    const detailHTML  = renderDetail(a, summaryHTML, ratingsHTML);
+    panel.innerHTML = `<div id="detail-area">${detailHTML}</div>`;
+    panel.scrollTop = scrollPos;  // 스크롤 위치 복원
+    restoreResponses(a.id);
+    attachRadioListeners(a.id);
+    updateProgress();
+    updateFinalSubmit();
+    return;
+  }
+
+  // ── 신규 제출 ──
   // 마지막 viewing time 기록
   if (startTimes[a.id]) {
     viewingTimes[a.id] = (viewingTimes[a.id] || 0) + (Date.now() - startTimes[a.id]);
@@ -624,17 +664,44 @@ function submitCurrent() {
   const card = document.getElementById(`card-${a.id}`);
   if (card) card.classList.add('decided');
 
-  updateSubmitBtn();
-  updateProgress();
+  // 우측 패널 재렌더링 (Likert 잠금 적용)
+  const sData = SUMMARIES[a.id] || {};
+  let summaryText = '';
+  if (CONDITION === 'naive') summaryText = sData.naive || '';
+  else if (CONDITION === 'compassionate') summaryText = sData.compassionate || '';
+  const summaryHTML = buildSummaryHTML(summaryText, CONDITION);
+  const ratingsHTML = buildLikertHTML(a.id);
+  const detailHTML  = renderDetail(a, summaryHTML, ratingsHTML);
+  document.getElementById('right-panel').innerHTML = `<div id="detail-area">${detailHTML}</div>`;
+  restoreResponses(a.id);
 
-  // 모두 완료 시 최종 제출 버튼 활성화 체크
+  updateProgress();
   updateFinalSubmit();
 
-  // 다음 미완료 지원자로 자동 이동 (없으면 현재 화면 유지)
+  // 다음 미완료 지원자로 자동 이동
   const nextIdx = findNextUnsubmitted(currentIdx);
   if (nextIdx !== -1) {
     selectApplicant(nextIdx);
   }
+}
+
+// 응답 복원 헬퍼
+function restoreResponses(appId) {
+  if (!responses[appId]) return;
+  QUESTIONS.forEach(q => {
+    const val = responses[appId][q.id];
+    if (val) {
+      const radio = document.querySelector(`input[name="${appId}_${q.id}"][value="${val}"]`);
+      if (radio) radio.checked = true;
+    }
+  });
+}
+
+// 라디오 이벤트 재부착 헬퍼
+function attachRadioListeners(appId) {
+  document.querySelectorAll(`input[name^="${appId}_"]`).forEach(r => {
+    r.addEventListener('change', checkSubmitReady);
+  });
 }
 
 // 현재 인덱스 이후부터 순환하며 미제출 지원자 찾기
@@ -656,8 +723,10 @@ function toggleCollapse(id) {
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle('open');
+  const chevron = el.querySelector('.chevron');
+  if (chevron) chevron.textContent = el.classList.contains('open') ? '▲ 접기' : '▼ 펼쳐보기';
 
-  // 펼쳤을 때 기록 (id 형식: col-{section}-{appId}, appId에 '-' 없음 가정)
+  // 펼쳤을 때 기록
   if (el.classList.contains('open')) {
     const m = id.match(/^col-(info|debt|story)-(.+)$/);
     if (m) {
@@ -676,13 +745,13 @@ function toggleFundBtn(appId) {
   if (selectedIds.has(appId)) {
     selectedIds.delete(appId);
     if (chk) chk.checked = false;
-    if (btn) { btn.classList.remove('selected'); btn.textContent = '+ 이 지원자를 승인 대상으로 추가'; }
+    if (btn) { btn.classList.remove('selected'); btn.textContent = '+ 이 지원자를 승인 대상자로 선택'; }
     if (card) card.classList.remove('fund-selected');
   } else {
     if (selectedIds.size >= 2) { alert('최대 2명까지만 선택할 수 있습니다.'); return; }
     selectedIds.add(appId);
     if (chk) chk.checked = true;
-    if (btn) { btn.classList.add('selected'); btn.textContent = '✓ 승인 대상으로 선택됨 (클릭 시 해제)'; }
+    if (btn) { btn.classList.add('selected'); btn.textContent = '✓ 승인 대상자로 선택됨 (클릭 시 해제)'; }
     if (card) card.classList.add('fund-selected');
   }
   updateFinalSubmit();
@@ -732,25 +801,41 @@ function finishExperiment() {
 
   // ── 완료 화면 (데이터 전송 중 메시지) ──
   document.getElementById('experiment-container').innerHTML = `
-    <div style="text-align:center; padding:60px 20px;">
-      <h2 style="color:#27ae60;">모든 평가가 완료되었습니다.</h2>
-      <p style="color:#555; margin-top:12px;">참여해 주셔서 감사합니다.</p>
-      <p id="save-status" style="color:#888; margin-top:16px; font-size:14px;">
-        데이터를 저장하는 중입니다...
-      </p>
-      ${RETURN_URL ? `
-        <p style="color:#aaa; margin-top:8px; font-size:13px;">
-          저장 완료 후 자동으로 이동합니다.
-          (<span id="countdown" style="font-weight:700; color:#2980b9;">-</span>초)
+    <div style="text-align:center; padding:60px 20px; max-width:600px; margin:0 auto;">
+      <h2 style="color:#27ae60; font-size:26px;">✅ 모든 평가가 완료되었습니다!</h2>
+
+      <div style="margin-top:24px; padding:20px 24px; background:#f0f7ff; border:1px solid #b6d4f5; border-radius:10px; text-align:left; font-size:15px; line-height:1.8; color:#2c3e50;">
+        <strong>📋 잠깐! 설문이 아직 끝나지 않았습니다.</strong><br>
+        실험 참여 후 <strong>사후 설문(약 3~5분)</strong>이 남아 있습니다.<br>
+        데이터 저장이 완료되면 자동으로 이동하오니, 잠시만 기다려 주세요.
+      </div>
+
+      <div style="margin-top:24px;">
+        <p id="save-status" style="color:#555; font-size:16px; font-weight:600;">
+          💾 응답 데이터를 저장하는 중입니다...
         </p>
-        <p style="margin-top:12px;">
-          <a id="manual-link" href="${RETURN_URL}"
-             style="background:#bdc3c7;color:white;padding:10px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;pointer-events:none;">
-            바로 이동하기
-          </a>
+        <p style="color:#aaa; font-size:13px; margin-top:4px;">
+          인터넷 환경에 따라 저장에 다소 시간이 소요될 수 있습니다.
         </p>
-      ` : ''}
-      <details style="margin-top:30px; text-align:left; max-width:600px; margin-inline:auto;">
+        ${RETURN_URL ? `
+          <p style="color:#888; margin-top:8px; font-size:15px;">
+            저장 완료 후 <strong><span id="countdown" style="color:#2980b9;">-</span>초</strong> 뒤 자동으로 이동합니다.
+          </p>
+          <p style="margin-top:16px;">
+            <a id="manual-link" href="${RETURN_URL}"
+               style="display:inline-block; background:#bdc3c7; color:white; padding:12px 32px;
+                      border-radius:8px; text-decoration:none; font-weight:700; font-size:15px;
+                      pointer-events:none;">
+              설문으로 바로 이동하기
+            </a>
+          </p>
+          <p style="color:#bbb; font-size:13px; margin-top:8px;">
+            (자동 이동이 되지 않을 경우 위 버튼을 클릭해 주세요)
+          </p>
+        ` : '<p style="color:#aaa; font-size:14px; margin-top:16px;">이 창을 닫아도 됩니다.</p>'}
+      </div>
+
+      <details style="margin-top:30px; text-align:left;">
         <summary style="cursor:pointer; color:#ccc; font-size:12px;">데이터 확인 (개발용)</summary>
         <pre style="font-size:11px; background:#f4f4f4; padding:12px; border-radius:6px; overflow:auto;">${JSON.stringify(output, null, 2)}</pre>
       </details>
@@ -766,9 +851,9 @@ function finishExperiment() {
   function startRedirect() {
     const statusEl = document.getElementById('save-status');
     const linkEl   = document.getElementById('manual-link');
-    if (statusEl) statusEl.textContent = '저장 완료. 잠시 후 설문 페이지로 이동합니다...';
+    if (statusEl) statusEl.textContent = '✅ 저장이 완료되었습니다!';
     if (linkEl) {
-      linkEl.style.background = '#3498db';
+      linkEl.style.background = '#27ae60';
       linkEl.style.pointerEvents = 'auto';
     }
     if (!RETURN_URL) return;
@@ -806,7 +891,7 @@ function finishExperiment() {
     // 저장 실패해도 redirect는 진행 (데이터 유실 로그만 남김)
     console.error('DataPipe 저장 실패:', err);
     const statusEl = document.getElementById('save-status');
-    if (statusEl) statusEl.textContent = '저장 중 오류가 발생했습니다. 잠시 후 이동합니다.';
+    if (statusEl) statusEl.textContent = '⚠️ 저장 중 오류가 발생했지만, 사후 설문으로 이동합니다.';
     startRedirect();
   });
 }
