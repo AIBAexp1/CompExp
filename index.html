@@ -64,19 +64,19 @@ body { margin: 0; padding: 20px; background: #f4f7f6; font-family: 'Malgun Gothi
 .rating-block { background: #fff; border: 2px solid #2980b9; border-radius: 12px; padding: 22px 24px; margin-top: 28px; box-shadow: 0 2px 10px rgba(41,128,185,0.1); }
 .rating-block-title { font-size: 19px; font-weight: 800; color: #1a5276; margin: 0 0 6px; }
 .rating-block-desc { font-size: 14px; color: #7f8c8d; margin-bottom: 18px; }
-.rating-area { background: #f8fbfd; border: 1px solid #d6e4f0; border-radius: 8px; padding: 18px; margin-bottom: 14px; }
+.rating-area { background: #f8fbfd; border: 1px solid #d6e4f0; border-radius: 8px; padding: clamp(10px,2vw,18px); margin-bottom: 14px; }
 .rating-area:last-of-type { margin-bottom: 0; }
-.rating-area label { font-size: 16px; font-weight: 600; display: block; margin-bottom: 12px; color: #2c3e50; }
-.likert-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.likert-row span.anchor { font-size: 13px; color: #888; white-space: nowrap; }
-.likert-row label.radio-label { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 14px; color: #555; cursor: pointer; }
-.likert-row input[type=radio] { cursor: pointer; transform: scale(1.2); }
+.rating-area label { font-size: clamp(13px,1.6vw,16px); font-weight: 600; display: block; margin-bottom: 12px; color: #2c3e50; }
+.likert-row { display: flex; gap: clamp(3px,1vw,8px); align-items: center; flex-wrap: nowrap; width: 100%; }
+.likert-row span.anchor { font-size: clamp(9px,1.15vw,13px); color: #888; white-space: normal; line-height: 1.2; text-align: center; flex: 0 1 68px; min-width: 0; }
+.likert-row label.radio-label { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: clamp(9px,1.15vw,14px); color: #555; cursor: pointer; flex: 0 0 auto; }
+.likert-row input[type=radio] { cursor: pointer; transform: scale(1.1); }
 
 /* 지원서 영역과 평가 영역 사이 구분선 */
 .section-divider { margin: 28px 0 0; border: none; border-top: 3px dashed #cdd6dd; }
 
 /* ── 버튼 ── */
-.btn-primary { background: #3498db; color: white; border: none; padding: 11px 30px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: 600; }
+.btn-primary { background: #3498db; color: white; border: none; padding: clamp(8px,1.6vw,11px) clamp(14px,3vw,30px); border-radius: 6px; font-size: clamp(12px,1.5vw,16px); cursor: pointer; font-weight: 600; white-space: nowrap; }
 .btn-primary:hover { background: #2980b9; }
 .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
 .btn-submit { background: #27ae60; }
@@ -86,7 +86,7 @@ body { margin: 0; padding: 20px; background: #f4f7f6; font-family: 'Malgun Gothi
 .progress-info { font-size: 14px; color: #7f8c8d; }
 
 /* ── 승인 버튼 (평가 블록 내부, 하단) ── */
-.fund-btn { padding: 12px 26px; border-radius: 24px; border: 2px solid #27ae60; background: white; color: #27ae60; font-weight: 700; font-size: 16px; cursor: pointer; white-space: nowrap; }
+.fund-btn { padding: clamp(8px,1.6vw,12px) clamp(12px,2.6vw,26px); border-radius: 24px; border: 2px solid #27ae60; background: white; color: #27ae60; font-weight: 700; font-size: clamp(12px,1.5vw,16px); cursor: pointer; white-space: nowrap; }
 .fund-btn:hover { background: #27ae60; color: white; }
 .fund-btn.selected { background: #27ae60; color: white; }
 .fund-btn.selected:hover { background: #e74c3c; border-color: #e74c3c; }
@@ -371,7 +371,7 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
         <div style="margin-bottom:14px; font-size:14px; color:#888; text-align:center;">
           ⬆ 모든 문항에 응답했다면 평가를 완료하세요. 완료 후에도 클릭하면 수정할 수 있습니다.
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
           <button id="fb-${a.id}" class="fund-btn${isSel?' selected':''}"
             onclick="toggleFundBtn('${a.id}')">${isSel ? '✓ 승인 대상자로 선택됨 (클릭 시 해제)' : '+ 이 지원자를 승인 대상자로 선택'}</button>
           <button id="submit-btn-${a.id}" class="btn-primary btn-submit"
