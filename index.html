@@ -117,6 +117,12 @@ const PARTICIPANT = urlParams.get('PROLIFIC_PID') || 'TEST';
 const RESPONSE_ID = urlParams.get('RESPONSE_ID') || '';          // Qualtrics ResponseID (데이터 병합 key)
 const RETURN_URL  = urlParams.get('return_url') || null;
 
+// Qualtrics 문항 안에 iframe으로 삽입되어 있는지 여부.
+// iframe이면 페이지 이동 대신 postMessage로 부모(Qualtrics)에게 결과를 전달한다.
+const IN_IFRAME = (function() {
+  try { return window.self !== window.top; } catch (e) { return true; } // cross-origin 접근 에러 시 iframe으로 간주
+})();
+
 // ──────────────────────────────────────────────
 // 지원자 raw 데이터 (요약문 제외, summaries.json에서 주입)
 // ──────────────────────────────────────────────
@@ -253,20 +259,16 @@ function shuffleArray(arr) {
   return a;
 }
 
-function sampleApplicants(allData) {
-  const byType = { 1: [], 2: [], 3: [] };
-  allData.forEach(a => {
-    const t = APP_TYPE_MAP[a.id];
-    if (byType[t]) byType[t].push(a);
-  });
+const FIXED_APPLICANT_IDS = ['VmhPv', 'YSOFu', '7VvLx', '2y7Vf'];
 
-  const sampled = [
-    ...shuffleArray(byType[1]).slice(0, 1),
-    ...shuffleArray(byType[2]).slice(0, 2),
-    ...shuffleArray(byType[3]).slice(0, 1),
-  ];
-  // 표시 순서도 랜덤하게
-  return shuffleArray(sampled);
+function sampleApplicants(allData) {
+  const byId = Object.fromEntries(allData.map(a => [a.id, a]));
+  const fixed = FIXED_APPLICANT_IDS.map(id => byId[id]).filter(Boolean);
+  if (fixed.length !== FIXED_APPLICANT_IDS.length) {
+    console.warn('FIXED_APPLICANT_IDS 중 일부를 APPLICANTS_DATA에서 찾지 못했습니다.', FIXED_APPLICANT_IDS, fixed.map(a=>a.id));
+  }
+  // 표시 순서만 랜덤화 (지원자 구성은 고정)
+  return shuffleArray(fixed);
 }
 
 // ──────────────────────────────────────────────
@@ -389,9 +391,7 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
 function buildSummaryHTML(summaryText, condition) {
   if (condition === 'control') return '';
 
-  const label = condition === 'compassionate' ? '공감형 요약' : '요약';
   const borderColor = condition === 'compassionate' ? '#3498db' : '#bdc3c7';
-  const titleColor  = condition === 'compassionate' ? '#2980b9' : '#7f8c8d';
 
   // 줄바꿈 → <li> 변환
   const items = summaryText
@@ -405,7 +405,6 @@ function buildSummaryHTML(summaryText, condition) {
     <div class="section-title">지원자 요약</div>
     <div class="summary-section">
       <div class="summary-card" style="border-left-color: ${borderColor};">
-        <div style="font-weight:700; font-size:14px; margin-bottom:10px; color:${titleColor};">${label}</div>
         <ul>${items}</ul>
       </div>
     </div>
@@ -817,7 +816,11 @@ function finishExperiment() {
         <p style="color:#aaa; font-size:13px; margin-top:4px;">
           인터넷 환경에 따라 저장에 다소 시간이 소요될 수 있습니다.
         </p>
-        ${RETURN_URL ? `
+        ${IN_IFRAME ? `
+          <p style="color:#888; margin-top:8px; font-size:15px;">
+            잠시 후 자동으로 다음 화면으로 넘어갑니다.
+          </p>
+        ` : (RETURN_URL ? `
           <p style="color:#888; margin-top:8px; font-size:15px;">
             저장 완료 후 <strong><span id="countdown" style="color:#2980b9;">-</span>초</strong> 뒤 자동으로 이동합니다.
           </p>
@@ -832,7 +835,7 @@ function finishExperiment() {
           <p style="color:#bbb; font-size:13px; margin-top:8px;">
             (자동 이동이 되지 않을 경우 위 버튼을 클릭해 주세요)
           </p>
-        ` : '<p style="color:#aaa; font-size:14px; margin-top:16px;">이 창을 닫아도 됩니다.</p>'}
+        ` : '<p style="color:#aaa; font-size:14px; margin-top:16px;">이 창을 닫아도 됩니다.</p>')}
       </div>
 
       <details style="margin-top:30px; text-align:left;">
@@ -870,6 +873,23 @@ function finishExperiment() {
     }, 1000);
   }
 
+  // iframe 안이면 페이지 이동 없이 부모(Qualtrics)에게 postMessage로 결과 전달.
+  // 아니면(단독 실행/구버전 fallback) 기존 redirect 로직 사용.
+  function completeAndExit() {
+    const statusEl = document.getElementById('save-status');
+    if (IN_IFRAME) {
+      if (statusEl) statusEl.textContent = '✅ 저장이 완료되었습니다!';
+      try {
+        window.parent.postMessage({ type: 'compexp_done', payload: output }, '*');
+        console.log('postMessage 전송 완료 (compexp_done)');
+      } catch (e) {
+        console.error('postMessage 전송 실패:', e);
+      }
+      return;
+    }
+    startRedirect();
+  }
+
   fetch('https://pipe.jspsych.org/api/data/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -885,14 +905,14 @@ function finishExperiment() {
   })
   .then(() => {
     console.log('DataPipe 저장 완료:', filename);
-    startRedirect();
+    completeAndExit();
   })
   .catch(err => {
-    // 저장 실패해도 redirect는 진행 (데이터 유실 로그만 남김)
+    // 저장 실패해도 진행은 계속 (데이터 유실 로그만 남김)
     console.error('DataPipe 저장 실패:', err);
     const statusEl = document.getElementById('save-status');
-    if (statusEl) statusEl.textContent = '⚠️ 저장 중 오류가 발생했지만, 사후 설문으로 이동합니다.';
-    startRedirect();
+    if (statusEl) statusEl.textContent = '⚠️ 저장 중 오류가 발생했지만, 계속 진행합니다.';
+    completeAndExit();
   });
 }
 
