@@ -890,30 +890,47 @@ function finishExperiment() {
     startRedirect();
   }
 
-  fetch('https://pipe.jspsych.org/api/data/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      experimentID: EXPERIMENT_ID,
-      filename: filename,
-      data: JSON.stringify(output)
+  // 실패 시 최대 2회 재시도(800ms 백오프) 후에도 안 되면 포기하되,
+  // 성공 여부를 output.saved_to_datapipe에 남겨서 postMessage로 부모에게 전달한다.
+  function saveToDataPipe(retriesLeft) {
+    return fetch('https://pipe.jspsych.org/api/data/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        experimentID: EXPERIMENT_ID,
+        filename: filename,
+        data: JSON.stringify(output)
+      })
     })
-  })
-  .then(res => {
-    if (!res.ok) throw new Error('DataPipe 응답 오류: ' + res.status);
-    return res.json();
-  })
-  .then(() => {
-    console.log('DataPipe 저장 완료:', filename);
-    completeAndExit();
-  })
-  .catch(err => {
-    // 저장 실패해도 진행은 계속 (데이터 유실 로그만 남김)
-    console.error('DataPipe 저장 실패:', err);
-    const statusEl = document.getElementById('save-status');
-    if (statusEl) statusEl.textContent = '⚠️ 저장 중 오류가 발생했지만, 계속 진행합니다.';
-    completeAndExit();
-  });
+    .then(res => {
+      if (!res.ok) throw new Error('DataPipe 응답 오류: ' + res.status);
+      return res.json();
+    })
+    .catch(err => {
+      if (retriesLeft > 0) {
+        console.warn('DataPipe 저장 재시도 (남은 횟수: ' + retriesLeft + ')', err);
+        return new Promise(resolve => setTimeout(resolve, 800))
+          .then(() => saveToDataPipe(retriesLeft - 1));
+      }
+      throw err;
+    });
+  }
+
+  saveToDataPipe(2)
+    .then(() => {
+      console.log('DataPipe 저장 완료:', filename);
+      output.saved_to_datapipe = true;
+      completeAndExit();
+    })
+    .catch(err => {
+      // 재시도까지 실패한 경우. 그래도 진행은 계속하되,
+      // saved_to_datapipe=false를 payload에 남겨 Qualtrics 쪽이 알 수 있게 한다.
+      console.error('DataPipe 저장 최종 실패 (재시도 소진):', err);
+      output.saved_to_datapipe = false;
+      const statusEl = document.getElementById('save-status');
+      if (statusEl) statusEl.textContent = '⚠️ 저장 중 오류가 발생했지만, 계속 진행합니다.';
+      completeAndExit();
+    });
 }
 
 // ──────────────────────────────────────────────
