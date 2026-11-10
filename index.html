@@ -239,7 +239,7 @@ const APPLICANTS_DATA = [
   }
 ];
 
-// app_type 매핑 (summaries.json에서도 가져오지만 로컬에도 보유)
+// app_type(slot) 매핑: [Study 1] Candidate Summary.csv의 slot
 const APP_TYPE_MAP = {
   '2y7Vf': 1, 'VmhPv': 3, 'BwdGE': 3,
   'jvq5e': 2, 'i5dYN': 2, '7VvLx': 2,
@@ -248,7 +248,7 @@ const APP_TYPE_MAP = {
 };
 
 // ──────────────────────────────────────────────
-// 세션별 지원자 샘플링: type1→1, type2→2, type3→1 (총 4명)
+// 세션 지원자: 고정 8명 (표시 순서만 랜덤)
 // ──────────────────────────────────────────────
 function shuffleArray(arr) {
   const a = [...arr];
@@ -259,7 +259,10 @@ function shuffleArray(arr) {
   return a;
 }
 
-const FIXED_APPLICANT_IDS = ['VmhPv', 'YSOFu', '7VvLx', '2y7Vf'];
+// 승인 인원 (지원자 수의 절반: 기존 4명 중 2명 → 8명 중 4명)
+const N_SELECT = 4;
+
+const FIXED_APPLICANT_IDS = __FIXED_IDS__;
 
 function sampleApplicants(allData) {
   const byId = Object.fromEntries(allData.map(a => [a.id, a]));
@@ -274,8 +277,9 @@ function sampleApplicants(allData) {
 // ──────────────────────────────────────────────
 // 숫자 포맷
 // ──────────────────────────────────────────────
-function fmt(n) {
-  if (!n && n !== 0) return '-';
+function fmt(n, emptyText) {
+  if (n === null || n === undefined || n === '') return emptyText || '-';
+  if (typeof n === 'string') return n;
   return Number(n).toLocaleString('ko-KR') + '원';
 }
 
@@ -304,13 +308,13 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
       <div class="collapsible-body">
         <div class="grid-container">
           <div class="data-item"><div class="data-label">나이 (생년)</div><div class="data-value">${a.age}세 (${a.birth})</div></div>
-          <div class="data-item"><div class="data-label">직업 | 지역</div><div class="data-value">${a.employment}${a.job ? ' / '+a.job : ''} | ${a.region}</div></div>
+          <div class="data-item"><div class="data-label">고용형태 | 지역</div><div class="data-value">${a.employment} | ${a.region}</div></div>
           <div class="data-item"><div class="data-label">월 수입</div><div class="data-value">${fmt(a.finance.income)}</div></div>
           <div class="data-item"><div class="data-label">월 지출</div><div class="data-value">${fmt(a.finance.expense)}</div></div>
           <div class="data-item"><div class="data-label">성별 | 학력</div><div class="data-value">${a.gender} | ${a.edu}</div></div>
           <div class="data-item"><div class="data-label highlight-blue">금융자산</div><div class="data-value highlight-blue">${fmt(a.finance.asset)}</div></div>
-          <div class="data-item"><div class="data-label">차량</div><div class="data-value">${fmt(a.finance.vehicle)}</div></div>
-          <div class="data-item"><div class="data-label">중위소득</div><div class="data-value">${a.income_level}</div></div>
+          <div class="data-item"><div class="data-label">차량</div><div class="data-value">${fmt(a.finance.vehicle, '해당없음')}</div></div>
+          <div class="data-item"><div class="data-label">자산 총액</div><div class="data-value">${fmt(a.finance.asset_total)}</div></div>
         </div>
       </div>
     </div>
@@ -334,12 +338,12 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
             <h4>💳 추가 대출</h4>
             ${extraYn ? `
               <div class="debt-row"><span>대출 여부</span><span>True (건수 ${a.extra_loan.count})</span></div>
-              <div class="debt-row"><span>총 부채</span><span class="highlight-red">${fmt(a.extra_loan.total)}</span></div>
-              <div class="debt-row"><span>잔액</span><span>${fmt(a.extra_loan.balance)}</span></div>
+              <div class="debt-row"><span>잔액</span><span class="highlight-red">${fmt(a.extra_loan.balance)}</span></div>
               <div class="debt-row"><span>월 상환액</span><span>${fmt(a.extra_loan.monthly)}</span></div>
-              <div class="debt-row"><span>평균 이자율</span><span class="highlight-red">${a.extra_loan.rate !== null ? a.extra_loan.rate + ' %' : '-'}</span></div>
+              <div class="debt-row"><span>평균 이자율</span><span class="highlight-red">${a.extra_loan.rate !== null && a.extra_loan.rate !== undefined ? a.extra_loan.rate + ' %' : '-'}</span></div>
               ${a.extra_loan.reason ? `<div class="debt-reason"><strong>대출 사유:</strong> ${a.extra_loan.reason}</div>` : ''}
-            ` : `<div class="debt-row"><span>대출 여부</span><span>False (건수 0)</span></div>`}
+            ` : `<div class="debt-row"><span>대출 여부</span><span>False (건수 0)</span></div>
+              ${a.extra_loan.reason ? `<div class="debt-reason"><strong>대출 사유:</strong> ${a.extra_loan.reason}</div>` : ''}`}
           </div>
         </div>
       </div>
@@ -443,7 +447,7 @@ function buildLikertHTML(applicantId) {
 // ──────────────────────────────────────────────
 // 실험 상태
 // ──────────────────────────────────────────────
-let SESSION_APPLICANTS = [];   // 이번 세션 4명
+let SESSION_APPLICANTS = [];   // 이번 세션 8명
 let SUMMARIES = {};            // summaries.json 내용
 let currentIdx = null;         // 현재 선택된 카드 인덱스 (최초 진입 전 null)
 let responses  = {};           // { appId: { q_repay:v, ... } }
@@ -452,7 +456,7 @@ let viewCounts = {};           // { appId: n } 열람(전환) 횟수
 let expandedSections = {};     // { appId: { info:bool, debt:bool, story:bool } } 상세 펼침 여부
 let startTimes   = {};         // { appId: timestamp }
 let submittedIds = new Set();  // 평가 제출 완료된 appId
-let selectedIds  = new Set();  // 승인 선택된 appId (최대 2명)
+let selectedIds  = new Set();  // 승인 선택된 appId (최대 N_SELECT명)
 
 // ──────────────────────────────────────────────
 // 실험 UI 빌드
@@ -483,7 +487,7 @@ function buildExperiment() {
       <div style="font-size:15px;">
         승인 선택:
         <span id="fund-count" style="font-size:22px; font-weight:800; color:#e74c3c; margin:0 6px;">0</span>
-        <span style="color:#aaa;">/ 2명</span>
+        <span style="color:#aaa;">/ ${N_SELECT}명</span>
         <span id="fund-block-msg" style="display:none; margin-left:12px; font-size:12px; color:#e74c3c;">⚠️ 평가를 완료하지 않은 지원자가 있습니다.</span>
       </div>
       <button id="final-submit-btn" disabled onclick="handleFinalSubmit()"
@@ -518,8 +522,8 @@ function buildLeftPanel() {
     });
     const chk = card.querySelector(`#chk-${a.id}`);
     chk.addEventListener('change', e => {
-      if (e.target.checked && selectedIds.size >= 2) {
-        alert('최대 2명까지만 선택할 수 있습니다.');
+      if (e.target.checked && selectedIds.size >= N_SELECT) {
+        alert(`최대 ${N_SELECT}명까지만 선택할 수 있습니다.`);
         e.target.checked = false; return;
       }
       if (e.target.checked) selectedIds.add(a.id);
@@ -747,7 +751,7 @@ function toggleFundBtn(appId) {
     if (btn) { btn.classList.remove('selected'); btn.textContent = '+ 이 지원자를 승인 대상자로 선택'; }
     if (card) card.classList.remove('fund-selected');
   } else {
-    if (selectedIds.size >= 2) { alert('최대 2명까지만 선택할 수 있습니다.'); return; }
+    if (selectedIds.size >= N_SELECT) { alert(`최대 ${N_SELECT}명까지만 선택할 수 있습니다.`); return; }
     selectedIds.add(appId);
     if (chk) chk.checked = true;
     if (btn) { btn.classList.add('selected'); btn.textContent = '✓ 승인 대상자로 선택됨 (클릭 시 해제)'; }
@@ -763,20 +767,20 @@ function updateFinalSubmit() {
   if (countEl) countEl.textContent = selectedIds.size;
   if (btn) {
     const allEvaluated = SESSION_APPLICANTS.every(a => submittedIds.has(a.id));
-    const ready = selectedIds.size === 2 && allEvaluated;
+    const ready = selectedIds.size === N_SELECT && allEvaluated;
     btn.disabled = !ready;
     if (ready) {
       btn.style.background = '#27ae60'; btn.style.color = 'white'; btn.style.cursor = 'pointer';
     } else {
       btn.style.background = '#ddd'; btn.style.color = '#aaa'; btn.style.cursor = 'not-allowed';
     }
-    if (blockMsg) blockMsg.style.display = (!allEvaluated && selectedIds.size === 2) ? 'inline' : 'none';
+    if (blockMsg) blockMsg.style.display = (!allEvaluated && selectedIds.size === N_SELECT) ? 'inline' : 'none';
   }
 }
 
 function handleFinalSubmit() {
   const allEvaluated = SESSION_APPLICANTS.every(a => submittedIds.has(a.id));
-  if (selectedIds.size !== 2 || !allEvaluated) return;
+  if (selectedIds.size !== N_SELECT || !allEvaluated) return;
   finishExperiment();
 }
 
