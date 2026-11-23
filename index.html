@@ -473,8 +473,8 @@ function renderDetail(applicant, summaryHTML, ratingsHTML) {
   const isSel = selectedIds.has(a.id);
 
   return `
-    <!-- sticky 헤더: 이름만 -->
-    <div style="position:sticky;top:0;z-index:10;background:#f4f7f6;display:flex;align-items:center;padding:12px 0 10px;margin-bottom:8px;border-bottom:1px solid #ddd;">
+    <!-- sticky 헤더: 이름만 (패널 위 가장자리에 붙음) -->
+    <div style="position:sticky;top:-20px;z-index:10;background:#f4f7f6;display:flex;align-items:center;margin:-20px -20px 8px;padding:14px 20px 12px;border-bottom:1px solid #ddd;">
       <h2 style="margin:0;font-size:23px;color:#2c3e50;">📄 ${a.name} 지원자</h2>
     </div>
 
